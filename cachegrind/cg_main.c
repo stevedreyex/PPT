@@ -48,12 +48,18 @@
 #include "cg_sim.c"
 #include "cg_branchpred.c"
 
+#include <stdlib.h>
+#include <isl/options.h>
+#include <isl/schedule.h>
+#include <isl/printer.h>
+
 /*------------------------------------------------------------*/
 /*--- Constants                                            ---*/
 /*------------------------------------------------------------*/
 
 /* Set to 1 for very verbose debugging */
 #define DEBUG_CG 0
+#define OFFLINE_SIM 1
 
 /*------------------------------------------------------------*/
 /*--- Options                                              ---*/
@@ -401,6 +407,9 @@ void log_1IrNoX_1Dr_cache_access(InstrInfo* n, Addr data_addr, Word data_size)
    cachesim_D1_doref(data_addr, data_size, 
                      &n->parent->Dr.m1, &n->parent->Dr.mL);
    n->parent->Dr.a++;
+   #if OFFLINE_SIM
+   VG_(printf)("R %d 0x%010lx %ld\n", n->parent->loc.line, data_addr, data_size);
+   #endif
 }
 
 static VG_REGPARM(3)
@@ -416,6 +425,9 @@ void log_1IrNoX_1Dw_cache_access(InstrInfo* n, Addr data_addr, Word data_size)
    cachesim_D1_doref(data_addr, data_size, 
                      &n->parent->Dw.m1, &n->parent->Dw.mL);
    n->parent->Dw.a++;
+   #if OFFLINE_SIM
+   VG_(printf)("W %d 0x%010lx %ld\n", n->parent->loc.line, data_addr, data_size);
+   #endif
 }
 
 /* Note that addEvent_D_guarded assumes that log_0Ir_1Dr_cache_access
@@ -429,6 +441,9 @@ void log_0Ir_1Dr_cache_access(InstrInfo* n, Addr data_addr, Word data_size)
    cachesim_D1_doref(data_addr, data_size, 
                      &n->parent->Dr.m1, &n->parent->Dr.mL);
    n->parent->Dr.a++;
+   #if OFFLINE_SIM
+   VG_(printf)("R %d 0x%010lx %ld\n", n->parent->loc.line, data_addr, data_size);
+   #endif
 }
 
 /* See comment on log_0Ir_1Dr_cache_access. */
@@ -440,6 +455,9 @@ void log_0Ir_1Dw_cache_access(InstrInfo* n, Addr data_addr, Word data_size)
    cachesim_D1_doref(data_addr, data_size, 
                      &n->parent->Dw.m1, &n->parent->Dw.mL);
    n->parent->Dw.a++;
+   #if OFFLINE_SIM
+   VG_(printf)("W %d 0x%010lx %ld\n", n->parent->loc.line, data_addr, data_size);
+   #endif
 }
 
 /* For branches, we consult two different predictors, one which
