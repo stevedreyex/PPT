@@ -1,3 +1,5 @@
 ./autogen.sh
-./configure
+mkdir install
+./configure --prefix=`pwd`/install
 make -j$(nproc)
+make install

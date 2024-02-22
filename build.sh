@@ -40,5 +40,7 @@ fi
 ./autogen.sh
 cd ./isl && bash ../build_submodule.sh && cd ..
 cd ./pet && bash ../build_submodule.sh && cd ..
-./configure CFALGS="-g" CPPFLAGS="-g" --prefix=`pwd`/install --enable-inner
+mkdir install
+./configure CFLAGS="-I `pwd`/isl/include -I `pwd`/pet/include" LDFLAGS="-L `pwd`/pet/install/lib -lpet -L `pwd`/isl/install/lib -lisl -v -g" --prefix=`pwd`/install --enable-inner
 make -j$(nproc)
+make install
