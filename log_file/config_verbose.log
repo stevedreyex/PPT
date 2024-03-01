@@ -1,0 +1,444 @@
+checking for a BSD-compatible install... /usr/bin/install -c
+checking whether build environment is sane... yes
+checking for a race-free mkdir -p... /usr/bin/mkdir -p
+checking for gawk... gawk
+checking whether make sets $(MAKE)... yes
+checking whether make supports nested variables... yes
+checking whether to enable maintainer-specific portions of Makefiles... no
+checking whether ln -s works... yes
+checking for gcc... gcc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables... 
+checking whether we are cross compiling... no
+checking for suffix of object files... o
+checking whether the compiler supports GNU C... yes
+checking whether gcc accepts -g... yes
+checking for gcc option to enable C11 features... none needed
+checking whether gcc understands -c and -o together... yes
+checking whether make supports the include directive... yes (GNU style)
+checking dependency style of gcc... gcc3
+checking how to run the C preprocessor... gcc -E
+checking for g++... g++
+checking whether the compiler supports GNU C++... yes
+checking whether g++ accepts -g... yes
+checking for g++ option to enable C++11 features... none needed
+checking dependency style of g++... gcc3
+checking for ranlib... ranlib
+checking for gcc-ranlib... /usr/bin/gcc-ranlib
+checking for a sed that does not truncate output... /usr/bin/sed
+checking for gsha256sum... no
+checking for sha256sum... sha256sum
+checking for ar... /usr/bin/ar
+checking for gcc-ar... /usr/bin/gcc-ar
+checking for perl... /usr/bin/perl
+checking for gdb... /usr/bin/gdb
+checking dependency style of gcc... gcc3
+checking for diff -u... yes
+checking for a supported version of gcc... ok (11)
+checking build system type... x86_64-pc-linux-gnu
+checking host system type... x86_64-pc-linux-gnu
+checking for a supported CPU... ok (x86_64)
+checking for a 64-bit only build... no
+checking for a 32-bit only build... no
+checking for a supported OS... ok (linux-gnu)
+checking for the kernel version... 2.6 or later (5.15.0-84-generic)
+checking for 32 bit build support... no
+checking for a supported CPU/OS combination... ok (amd64-linux)
+checking for use as an inner Valgrind... no
+checking for using the undefined behaviour sanitiser... no
+checking where gdb scripts are installed... ${exec_prefix}/libexec/valgrind
+checking for stdio.h... yes
+checking for stdlib.h... yes
+checking for string.h... yes
+checking for inttypes.h... yes
+checking for stdint.h... yes
+checking for strings.h... yes
+checking for sys/stat.h... yes
+checking for sys/types.h... yes
+checking for unistd.h... yes
+checking for sys/time.h... yes
+checking for sys/param.h... yes
+checking for features.h... yes
+checking for grep that handles long lines and -e... /usr/bin/grep
+checking for egrep... /usr/bin/grep -E
+checking whether pthread_create needs libpthread... no
+checking the glibc version... 2.35 family
+checking for AT_FDCWD... yes
+checking for stpncpy... yes
+checking for PTRACE_GETREGS... yes
+checking for CLOCK_MONOTONIC... yes
+checking for Elf32_Chdr... yes
+checking for Elf64_Chdr... yes
+checking for pthread_rwlock_t... yes
+checking for clockid_t... yes
+checking for PTHREAD_MUTEX_ADAPTIVE_NP... yes
+checking for PTHREAD_MUTEX_ERRORCHECK_NP... yes
+checking for PTHREAD_MUTEX_RECURSIVE_NP... yes
+checking for PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP... yes
+checking for pthread_mutex_t.__m_kind... no
+checking for pthread_mutex_t.__data.__kind... yes
+checking if AT_HWCAP contains the altivec indicator... no
+checking if AT_HWCAP contains the vsx indicator... no
+checking if AT_HWCAP contains the dfp indicator... no
+checking if AT_HWCAP contains the arch_2_05 indicator... no
+checking if AT_HWCAP contains the arch_2_06 indicator... no
+checking if AT_HWCAP contains the arch_2_07 indicator... no
+checking if AT_HWCAP contains the arch_3_00 indicator... no
+checking if AT_HWCAP contains the arch_3_1 indicator... no
+checking if AT_HWCAP contains the htm indicator... no
+checking if AT_HWCAP contains the mma indicator... no
+checking that assembler knows ISA 2.07 instructions ... no
+checking for Altivec support in the compiler ... no
+checking for VSX compiler flag support... no
+checking for VSX support in the assembler ... no
+checking that assembler knows DFP... no
+checking that compiler knows -mhard-dfp switch... no
+checking that compiler knows DFP datatypes... yes
+checking if compiler accepts the -mhtm flag... no
+checking if compiler can find the htm builtins... no
+checking that assembler knows ISA 3.00 ... no
+checking that assembler knows xscvhpdp ... no
+checking that assembler knows darn instruction ... no
+checking that assembler knows ISA 3.1 ... no
+checking for pthread_create@GLIBC2.0()... no
+checking for dlinfo RTLD_DI_TLS_MODID... yes
+checking for eventfd()... yes
+checking that C++ compiler can compile C++17 code... yes
+checking that C++ compiler can include <thread> header file... yes
+checking that C++ compiler can include <condition_variable> header file... yes
+checking that C++ compiler can use std::shared_timed_mutex... yes
+checking that C++ compiler can use std::timed_mutex... yes
+checking for struct user_regs_struct... yes
+checking for __NR_membarrier... yes
+checking if gcc accepts -m32... yes
+checking if gcc accepts -m64... yes
+checking if gcc accepts -march=octeon... no
+checking if gcc accepts -march=octeon2... no
+checking if gcc accepts -mmsa... no
+checking if gcc is producing mips n32 binaries... no
+checking if gcc is producing mips n64 binaries... no
+checking if gcc accepts -mmmx... yes
+checking if gcc accepts -msse... yes
+checking if gcc accepts -mpreferred-stack-boundary=2 -m32... yes
+checking if gcc accepts -mlong-double-128... yes
+checking for using the link time optimisation... no
+checking if gcc accepts -Wmemset-transposed-args... yes
+checking if gcc accepts -Wnonnull... yes
+checking if gcc accepts -Woverflow... yes
+checking if gcc accepts -Wpointer-sign... yes
+checking if gcc accepts -Wuninitialized... yes
+checking if gcc accepts -Wmaybe-uninitialized... yes
+checking if gcc accepts -Wunused-function... yes
+checking if gcc accepts -Wstatic-local-in-inline... no
+checking if gcc accepts -Wmismatched-new-delete... yes
+checking if gcc accepts -Winfinite-recursion... no
+checking if gcc accepts -Wexpansion-to-defined... yes
+checking if gcc accepts -Wunused-variable... yes
+checking if gcc accepts -Wunused-but-set-variable... yes
+checking if gcc accepts -Wnon-power-of-two-alignment... no
+checking if gcc accepts -Wsign-compare... yes
+checking if gcc accepts -Wstringop-overflow... yes
+checking if gcc accepts -Wstringop-overread... yes
+checking if gcc accepts -Wstringop-truncation... yes
+checking if gcc accepts -Wformat-overflow... yes
+checking if gcc accepts -Wuse-after-free... no
+checking if gcc accepts -Wfree-nonheap-object... yes
+checking if gcc accepts -Wfortify-source... no
+checking if gcc accepts -Wbuiltin-memcpy-chk-size... no
+checking if gcc accepts -Wincompatible-pointer-types-discards-qualifiers... no
+checking if gcc accepts -Wsuspicious-bzero... no
+checking if gcc accepts -Wattributes... yes
+checking if gcc accepts -Walloc-size-larger-than=1677216... yes
+checking if gcc accepts -Wwrite-strings... yes
+checking if gcc accepts -Wempty-body... yes
+checking if gcc accepts -Wformat... yes
+checking if gcc accepts -Wformat-signedness... yes
+checking if gcc accepts -Wcast-qual... yes
+checking if gcc accepts -Wold-style-declaration... yes
+checking if gcc accepts -Wignored-qualifiers... yes
+checking if gcc accepts -Wmissing-parameter-type... yes
+checking if gcc accepts -Wlogical-op... yes
+checking if gcc accepts -Wenum-conversion... yes
+checking if gcc accepts -Wimplicit-fallthrough=2... yes
+checking if gcc accepts -Wformat-security... yes
+checking if gcc accepts -Wextra or -W... -Wextra
+checking if g++ accepts -faligned-new... yes
+checking if g++ accepts -fsized-deallocation... yes
+checking if g++ supports aligned new and delete... yes
+checking if gcc accepts -fno-stack-protector... yes
+checking if gcc accepts -finline-functions... yes
+checking if gcc accepts -fno-ipa-icf... yes
+checking if gcc accepts --param inline-unit-growth... yes
+checking if gcc accepts -gdwarf-4 -fdebug-types-section... yes
+checking if gcc accepts -g -gz=zlib... yes
+checking if gcc accepts -g -gz=zlib-gnu... yes
+checking if gcc accepts nested functions... yes
+checking if gcc accepts the 'p' constraint in asm statements... yes
+checking if gcc accepts -pie... yes
+checking if gcc accepts -ansi... yes
+checking if gcc accepts -no-pie... yes
+checking if the linker accepts -Wl,--image-base... no
+checking if the linker accepts -Wl,-Ttext-segment... yes
+configure: ld --image-base or -Ttext-segment used, no need to strip build-id NOTEs.
+checking if ppc32/64 as supports mtocrf/mfocrf... no
+checking if ppc32/64 asm supports phased out floating point instructions... no
+checking if amd64 assembler supports fxsave64/fxrstor64... yes
+checking if x86/amd64 assembler speaks SSE3... yes
+checking if x86/amd64 assembler speaks SSSE3... yes
+checking if x86/amd64 assembler supports 'pclmulqdq'... yes
+checking if x86/amd64 assembler supports 'vpclmulqdq'... yes
+checking if x86/amd64 assembler supports FMA4 'vfmaddpd'... yes
+checking if x86/amd64 assembler supports 'lzcnt'... yes
+checking if x86/amd64 assembler supports 'loopnel'... yes
+checking if x86/amd64 assembler supports 'addr32'... yes
+checking if x86/amd64 assembler speaks SSE4.2... yes
+checking if x86/amd64 assembler speaks AVX... yes
+checking if x86/amd64 assembler speaks AVX2... yes
+checking if x86/amd64 assembler speaks TSX... yes
+checking if x86/amd64 assembler speaks BMI1 and BMI2... yes
+checking if x86/amd64 assembler speaks FMA... yes
+checking if amd64 assembler knows the MPX instructions... yes
+checking if amd64 assembler knows the ADX instructions... yes
+checking if amd64 assembler knows the RDRAND instruction... yes
+checking if amd64 assembler knows the RDSEED instruction... yes
+checking if amd64 assembler knows the F16C instructions... yes
+checking if x86/amd64 assembler knows the MOVBE insn... yes
+checking if gcc supports the ifunc attribute... yes
+checking if gcc supports the armv8 crc feature flag... no
+checking if gcc supports the armv81 feature flag and assembler supports v8.1 instructions... no
+checking if gcc supports the armv82 feature flag and assembler supports v8.2 instructions... no
+checking if gcc supports the armv82-a+dotprod feature flag and assembler supports dotprod instructions... no
+checking for TLS support... yes
+checking for asm/unistd.h... yes
+checking for endian.h... yes
+checking for mqueue.h... yes
+checking for sys/endian.h... no
+checking for sys/epoll.h... yes
+checking for sys/eventfd.h... yes
+checking for sys/klog.h... yes
+checking for sys/poll.h... yes
+checking for sys/prctl.h... yes
+checking for sys/signal.h... yes
+checking for sys/signalfd.h... yes
+checking for sys/syscall.h... yes
+checking for sys/sysnvl.h... no
+checking for sys/time.h... (cached) yes
+checking for sys/types.h... (cached) yes
+checking if <linux/futex.h> is usable... yes
+checking for uid_t in sys/types.h... yes
+checking for off_t... yes
+checking for size_t... yes
+checking for struct statx... yes
+checking for working memcmp... yes
+checking for getpagesize... yes
+checking for working mmap... yes
+checking for pthread_create in -lpthread... yes
+checking for clock_gettime in -lrt... yes
+checking for aligned_alloc... yes
+checking for clock_gettime... yes
+checking for copy_file_range... yes
+checking for epoll_create... yes
+checking for epoll_pwait... yes
+checking for getaddrinfo... yes
+checking for klogctl... yes
+checking for mallinfo... yes
+checking for memchr... yes
+checking for memfd_create... yes
+checking for memset... yes
+checking for mkdir... yes
+checking for mremap... yes
+checking for pipe2... yes
+checking for ppoll... yes
+checking for preadv... yes
+checking for preadv2... yes
+checking for process_vm_readv... yes
+checking for process_vm_writev... yes
+checking for pthread_barrier_init... yes
+checking for pthread_condattr_setclock... yes
+checking for pthread_mutex_timedlock... yes
+checking for pthread_rwlock_timedrdlock... yes
+checking for pthread_rwlock_timedwrlock... yes
+checking for pthread_setname_np... yes
+checking for pthread_spin_lock... yes
+checking for pthread_yield... no
+checking for pwritev... yes
+checking for pwritev2... yes
+checking for rawmemchr... yes
+checking for readlinkat... yes
+checking for reallocarray... yes
+checking for semtimedop... yes
+checking for setcontext... yes
+checking for signalfd... yes
+checking for sigwaitinfo... yes
+checking for strchr... yes
+checking for strdup... yes
+checking for strpbrk... yes
+checking for strrchr... yes
+checking for strstr... yes
+checking for swapcontext... yes
+checking for syscall... yes
+checking for utimensat... yes
+checking for mempcpy... yes
+checking for strlcat... no
+checking for strlcpy... no
+checking for stpncpy... yes
+checking for strchrnul... yes
+checking for memrchr... yes
+checking for strndup... yes
+checking for close_range... yes
+checking for wcsncpy... yes
+checking for mpicc... /usr/bin/mpicc
+checking primary target for usable MPI2-compliant C compiler and mpi.h... yes, /usr/bin/mpicc
+checking secondary target for usable MPI2-compliant C compiler and mpi.h... no
+checking for boost... no
+checking for OpenMP... yes
+checking for __builtin_popcount()... yes
+checking for __builtin_clz()... yes
+checking for __builtin_ctz()... yes
+checking if gcc supports __sync_add_and_fetch for the primary target... yes
+checking if gcc supports __sync_add_and_fetch on uint64_t for all targets... yes
+checking if platform has openat2 syscall... yes
+checking if platform has openssl crypto... yes
+checking if platform has aio_readv... no
+checking if g++ supports __sync_add_and_fetch... yes
+checking if libstdc++ supports annotating shared pointers... yes
+checking for AT_GNU_LIBC_C17_ALIGNED_ALLOC... no
+checking for thrd_create()... yes
+checking that generated files are newer than configure... done
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: creating VEX/Makefile
+config.status: creating valgrind.spec
+config.status: creating valgrind.pc
+config.status: creating glibc-2.X.supp
+config.status: creating glibc-2.X-helgrind.supp
+config.status: creating glibc-2.X-drd.supp
+config.status: creating include/valgrind.h
+config.status: creating docs/Makefile
+config.status: creating docs/xml/vg-entities.xml
+config.status: creating tests/Makefile
+config.status: creating tests/vg_regtest
+config.status: creating perf/Makefile
+config.status: creating perf/vg_perf
+config.status: creating gdbserver_tests/Makefile
+config.status: creating gdbserver_tests/solaris/Makefile
+config.status: creating include/Makefile
+config.status: creating auxprogs/Makefile
+config.status: creating mpi/Makefile
+config.status: creating coregrind/Makefile
+config.status: creating memcheck/Makefile
+config.status: creating memcheck/tests/Makefile
+config.status: creating memcheck/tests/common/Makefile
+config.status: creating memcheck/tests/amd64/Makefile
+config.status: creating memcheck/tests/x86/Makefile
+config.status: creating memcheck/tests/linux/Makefile
+config.status: creating memcheck/tests/linux/debuginfod-check.vgtest
+config.status: creating memcheck/tests/darwin/Makefile
+config.status: creating memcheck/tests/solaris/Makefile
+config.status: creating memcheck/tests/freebsd/Makefile
+config.status: creating memcheck/tests/amd64-linux/Makefile
+config.status: creating memcheck/tests/arm64-linux/Makefile
+config.status: creating memcheck/tests/x86-linux/Makefile
+config.status: creating memcheck/tests/amd64-solaris/Makefile
+config.status: creating memcheck/tests/x86-solaris/Makefile
+config.status: creating memcheck/tests/amd64-freebsd/Makefile
+config.status: creating memcheck/tests/x86-freebsd/Makefile
+config.status: creating memcheck/tests/ppc32/Makefile
+config.status: creating memcheck/tests/ppc64/Makefile
+config.status: creating memcheck/tests/s390x/Makefile
+config.status: creating memcheck/tests/mips32/Makefile
+config.status: creating memcheck/tests/mips64/Makefile
+config.status: creating memcheck/tests/vbit-test/Makefile
+config.status: creating cachegrind/Makefile
+config.status: creating cachegrind/tests/Makefile
+config.status: creating cachegrind/tests/x86/Makefile
+config.status: creating cachegrind/cg_annotate
+config.status: creating cachegrind/cg_diff
+config.status: creating cachegrind/cg_merge
+config.status: creating callgrind/Makefile
+config.status: creating callgrind/callgrind_annotate
+config.status: creating callgrind/callgrind_control
+config.status: creating callgrind/tests/Makefile
+config.status: creating helgrind/Makefile
+config.status: creating helgrind/tests/Makefile
+config.status: creating drd/Makefile
+config.status: creating drd/scripts/download-and-build-splash2
+config.status: creating drd/tests/Makefile
+config.status: creating massif/Makefile
+config.status: creating massif/tests/Makefile
+config.status: creating massif/ms_print
+config.status: creating dhat/Makefile
+config.status: creating dhat/tests/Makefile
+config.status: creating lackey/Makefile
+config.status: creating lackey/tests/Makefile
+config.status: creating none/Makefile
+config.status: creating none/tests/Makefile
+config.status: creating none/tests/scripts/Makefile
+config.status: creating none/tests/amd64/Makefile
+config.status: creating none/tests/ppc32/Makefile
+config.status: creating none/tests/ppc64/Makefile
+config.status: creating none/tests/x86/Makefile
+config.status: creating none/tests/arm/Makefile
+config.status: creating none/tests/arm64/Makefile
+config.status: creating none/tests/s390x/Makefile
+config.status: creating none/tests/mips32/Makefile
+config.status: creating none/tests/mips64/Makefile
+config.status: creating none/tests/nanomips/Makefile
+config.status: creating none/tests/linux/Makefile
+config.status: creating none/tests/darwin/Makefile
+config.status: creating none/tests/solaris/Makefile
+config.status: creating none/tests/freebsd/Makefile
+config.status: creating none/tests/amd64-linux/Makefile
+config.status: creating none/tests/x86-linux/Makefile
+config.status: creating none/tests/amd64-darwin/Makefile
+config.status: creating none/tests/x86-darwin/Makefile
+config.status: creating none/tests/amd64-solaris/Makefile
+config.status: creating none/tests/x86-solaris/Makefile
+config.status: creating none/tests/x86-freebsd/Makefile
+config.status: creating exp-bbv/Makefile
+config.status: creating exp-bbv/tests/Makefile
+config.status: creating exp-bbv/tests/x86/Makefile
+config.status: creating exp-bbv/tests/x86-linux/Makefile
+config.status: creating exp-bbv/tests/amd64-linux/Makefile
+config.status: creating exp-bbv/tests/ppc32-linux/Makefile
+config.status: creating exp-bbv/tests/arm-linux/Makefile
+config.status: creating shared/Makefile
+config.status: creating solaris/Makefile
+config.status: creating coregrind/link_tool_exe_linux
+config.status: creating coregrind/link_tool_exe_freebsd
+config.status: creating coregrind/link_tool_exe_darwin
+config.status: creating coregrind/link_tool_exe_solaris
+config.status: creating tests/filter_stderr_basic
+config.status: creating tests/filter_discards
+config.status: creating memcheck/tests/filter_stderr
+config.status: creating memcheck/tests/filter_dw4
+config.status: creating memcheck/tests/filter_overlaperror
+config.status: creating memcheck/tests/x86/filter_pushfpopf
+config.status: creating gdbserver_tests/filter_gdb
+config.status: creating gdbserver_tests/filter_memcheck_monitor
+config.status: creating gdbserver_tests/filter_stderr
+config.status: creating gdbserver_tests/filter_vgdb
+config.status: creating drd/tests/filter_stderr
+config.status: creating drd/tests/filter_error_count
+config.status: creating drd/tests/filter_error_summary
+config.status: creating drd/tests/filter_stderr_and_thread_no_and_offset
+config.status: creating drd/tests/filter_thread_no
+config.status: creating drd/tests/filter_xml_and_thread_no
+config.status: creating helgrind/tests/filter_stderr
+config.status: creating config.h
+config.status: config.h is unchanged
+config.status: executing depfiles commands
+
+                    Version: 3.23.0.GIT
+         Maximum build arch: amd64
+         Primary build arch: amd64
+       Secondary build arch: 
+                   Build OS: linux
+     Link Time Optimisation: no
+       Primary build target: AMD64_LINUX
+     Secondary build target: 
+           Platform variant: vanilla
+      Primary -DVGPV string: -DVGPV_amd64_linux_vanilla=1
+         Default supp files: ./xfree-3.supp ./xfree-4.supp glibc-2.X-drd.supp glibc-2.X-helgrind.supp glibc-2.X.supp 
+

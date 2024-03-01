@@ -1,0 +1,287 @@
+--2197318:1:debuglog DebugLog system started by Stage 1, level 1 logging requested
+--2197318:1:launcher tool 'cachegrind' requested
+--2197318:1:launcher selected platform 'amd64-linux'
+--2197318:1:launcher launching /home/dreyex/Documents/Research/PPT/./.in_place/cachegrind-amd64-linux
+--2197318:1:debuglog DebugLog system started by Stage 2 (main), level 1 logging requested
+--2197318:1:    main Welcome to Valgrind version 3.23.0.GIT debug logging
+--2197318:1:    main Checking current stack is plausible
+--2197318:1:    main Checking initial stack was noted
+--2197318:1:    main Starting the address space manager
+--2197318:1:    main Address space manager is running
+--2197318:1:    main Starting the dynamic memory manager
+--2197318:1:mallocfr newSuperblock at 0x1002001000 (pszB 4194272)  owner VALGRIND/core
+--2197318:1:mallocfr deferred_reclaimSuperblock at 0x1002001000 (pszB 4194272)  (prev 0x0) owner VALGRIND/core
+--2197318:1:    main Dynamic memory manager is running
+--2197318:1:    main Initialise m_debuginfo
+--2197318:1:    main VG_(libdir) = /home/dreyex/Documents/Research/PPT/./.in_place
+--2197318:1:    main Getting launcher's name ...
+--2197318:1:    main ... /home/dreyex/Documents/Research/PPT/coregrind/valgrind
+--2197318:1:    main Get hardware capabilities ...
+--2197318:1:   cache Autodetected cache info is sensible
+--2197318:1:   cache Cache info:
+--2197318:1:   cache   #levels = 3
+--2197318:1:   cache   #caches = 4
+--2197318:1:   cache      cache #0:
+--2197318:1:   cache         kind = data
+--2197318:1:   cache         level = 1
+--2197318:1:   cache         size = 49152 bytes
+--2197318:1:   cache         linesize = 64 bytes
+--2197318:1:   cache         assoc = 12
+--2197318:1:   cache      cache #1:
+--2197318:1:   cache         kind = insn
+--2197318:1:   cache         level = 1
+--2197318:1:   cache         size = 32768 bytes
+--2197318:1:   cache         linesize = 64 bytes
+--2197318:1:   cache         assoc = 8
+--2197318:1:   cache      cache #2:
+--2197318:1:   cache         kind = unified
+--2197318:1:   cache         level = 2
+--2197318:1:   cache         size = 1310720 bytes
+--2197318:1:   cache         linesize = 64 bytes
+--2197318:1:   cache         assoc = 10
+--2197318:1:   cache      cache #3:
+--2197318:1:   cache         kind = unified
+--2197318:1:   cache         level = 3
+--2197318:1:   cache         size = 26214400 bytes
+--2197318:1:   cache         linesize = 64 bytes
+--2197318:1:   cache         assoc = 10
+--2197318:1:    main ... arch = AMD64, hwcaps = amd64-cx16-lzcnt-rdtscp-sse3-ssse3-avx-avx2-bmi-f16c-rdrand-rdseed
+Arguments:
+argv[0] = /home/dreyex/Documents/Research/PPT/./coregrind/valgrind
+argv[1] = --tool=cachegrind
+argv[2] = --instr-at-start=no
+argv[3] = --cache-sim=yes
+argv[4] = --D1=49152,12,64
+argv[5] = --I1=32768,8,64
+argv[6] = --L2=1310720,10,64
+argv[7] = -v
+argv[8] = -d
+argv[9] = --log-fd=1
+argv[10] = /home/dreyex/use_this/jacobi-2d
+--2197318:1:    main Getting the working directory at startup
+--2197318:1:    main ... /home/dreyex/Documents/tmp/stdout_testing
+--2197318:1:    main Split up command line
+--2197318:1:    main (early_) Process Valgrind's command line options
+--2197318:1:    main Create initial image
+--2197318:1: initimg Loading client
+--2197318:1: initimg Setup client env
+--2197318:1: initimg Setup client stack: size will be 8388608
+--2197318:1: initimg Setup client data (brk) segment
+--2197318:1:    main Setup file descriptors
+--2197318:1:    main Create fake /proc/<pid>/cmdline
+--2197318:1:    main Create fake /proc/<pid>/auxv
+--2197318:1:    main Initialise the tool part 1 (pre_clo_init)
+--2197318:1:    main Print help and quit, if requested
+--2197318:1:    main (main_) Process Valgrind's command line options, setup logging
+--2197318:1:    main Print the preamble...
+--2197318:1:    main ...finished the preamble
+--2197318:1:    main Initialise the tool part 2 (post_clo_init)
+--2197318:1:    main Initialise TT/TC
+--2197318:1:    main Initialise redirects
+--2197318:1:mallocfr deferred_reclaimSuperblock NULL (prev 0x1002001000) owner VALGRIND/core
+--2197318:1:mallocfr newSuperblock at 0x100247C000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:    main Load initial debug info
+--2197318:1:mallocfr newSuperblock at 0x100257C000 (pszB   65504)  owner VALGRIND/demangle
+--2197318:1:hashtabl resizing table `di.storage.addStr.1' from 769 to 1543 (total elems 770)
+--2197318:1:hashtabl resizing table `di.storage.addStr.1' from 1543 to 3079 (total elems 1544)
+--2197318:1:mallocfr newSuperblock at 0x100258C000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:hashtabl resizing table `di.storage.addStr.1' from 3079 to 6151 (total elems 3080)
+--2197318:1:mallocfr newSuperblock at 0x100268C000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:   redir transfer ownership V -> C of 0x58087000 .. 0x58087fff
+--2197318:1:    main Initialise scheduler (phase 1)
+--2197318:1:   sched sched_init_phase1
+--2197318:1:    main Tell tool about initial permissions
+--2197318:1:    main Initialise scheduler (phase 2)
+--2197318:1:   sched sched_init_phase2: tid_main=1, cls_end=0x1fff000fff, cls_sz=8388608
+--2197318:1:    main Finalise initial image
+--2197318:1:    main Initialise signal management
+--2197318:1:    main 
+--2197318:1:    main 
+--2197318:1: aspacem <<< SHOW_SEGMENTS: Memory layout at client startup (36 segments)
+--2197318:1: aspacem 3 segment names in 3 slots
+--2197318:1: aspacem freelist is empty
+--2197318:1: aspacem (0,4,9) /home/dreyex/Documents/Research/PPT/cachegrind/cachegrind-amd64-linux
+--2197318:1: aspacem (1,78,7) /home/dreyex/use_this/jacobi-2d
+--2197318:1: aspacem (2,114,7) /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+--2197318:1: aspacem   0: RSVN 0000000000-0000107fff 1081344 ----- SmFixed
+--2197318:1: aspacem   1: file 0000108000-0000108fff    4096 r---- d=0x10303 i=55967922 o=0       (1,78)
+--2197318:1: aspacem   2: file 0000109000-0000109fff    4096 r-x-- d=0x10303 i=55967922 o=4096    (1,78)
+--2197318:1: aspacem   3: file 000010a000-000010afff    4096 r---- d=0x10303 i=55967922 o=8192    (1,78)
+--2197318:1: aspacem   4: file 000010b000-000010cfff    8192 rw--- d=0x10303 i=55967922 o=8192    (1,78)
+--2197318:1: aspacem   5: RSVN 000010d000-0003ffffff     62m ----- SmFixed
+--2197318:1: aspacem   6: file 0004000000-0004001fff    8192 r---- d=0x10303 i=24907330 o=0       (2,114)
+--2197318:1: aspacem   7: file 0004002000-000402bfff  172032 r-x-- d=0x10303 i=24907330 o=8192    (2,114)
+--2197318:1: aspacem   8: file 000402c000-0004036fff   45056 r---- d=0x10303 i=24907330 o=180224  (2,114)
+--2197318:1: aspacem   9:      0004037000-0004037fff    4096
+--2197318:1: aspacem  10: file 0004038000-000403bfff   16384 rw--- d=0x10303 i=24907330 o=225280  (2,114)
+--2197318:1: aspacem  11: anon 000403c000-000403cfff    4096 rwx--
+--2197318:1: aspacem  12: RSVN 000403d000-000483bfff 8384512 ----- SmLower
+--2197318:1: aspacem  13:      000483c000-0057ffffff   1335m
+--2197318:1: aspacem  14: FILE 0058000000-0058000fff    4096 r---- d=0x10303 i=58626974 o=0       (0,4)
+--2197318:1: aspacem  15: FILE 0058001000-0058086fff  548864 r-x-- d=0x10303 i=58626974 o=4096    (0,4)
+--2197318:1: aspacem  16: file 0058087000-0058087fff    4096 r-x-- d=0x10303 i=58626974 o=552960  (0,4)
+--2197318:1: aspacem  17: FILE 0058088000-00581a9fff 1187840 r-x-- d=0x10303 i=58626974 o=557056  (0,4)
+--2197318:1: aspacem  18: FILE 00581aa000-0058240fff  618496 r---- d=0x10303 i=58626974 o=1744896 (0,4)
+--2197318:1: aspacem  19:      0058241000-0058241fff    4096
+--2197318:1: aspacem  20: FILE 0058242000-0058246fff   20480 rw--- d=0x10303 i=58626974 o=2363392 (0,4)
+--2197318:1: aspacem  21: ANON 0058247000-0058c3efff      9m rw---
+--2197318:1: aspacem  22:      0058c3f000-1001ffffff  64147m
+--2197318:1: aspacem  23: RSVN 1002000000-1002000fff    4096 ----- SmFixed
+--2197318:1: aspacem  24: ANON 1002001000-100278bfff 7909376 rwx--
+--2197318:1: aspacem  25:      100278c000-1ffe800fff  65472m
+--2197318:1: aspacem  26: RSVN 1ffe801000-1ffeffdfff 8376320 ----- SmUpper
+--2197318:1: aspacem  27: anon 1ffeffe000-1fff000fff   12288 rw---
+--2197318:1: aspacem  28:      1fff001000-1fffffffff     15m
+--2197318:1: aspacem  29: RSVN 2000000000-7ffcd4efafff 130931g ----- SmFixed
+--2197318:1: aspacem  30: ANON 7ffcd4efb000-7ffcd4f1cfff  139264 rw---
+--2197318:1: aspacem  31: RSVN 7ffcd4f1d000-7ffcd4fd5fff  757760 ----- SmFixed
+--2197318:1: aspacem  32: ANON 7ffcd4fd6000-7ffcd4fd9fff   16384 r----
+--2197318:1: aspacem  33: RSVN 7ffcd4fda000-ffffffffff5fffff  16383e ----- SmFixed
+--2197318:1: aspacem  34: ANON ffffffffff600000-ffffffffff600fff    4096 --x--
+--2197318:1: aspacem  35: RSVN ffffffffff601000-ffffffffffffffff      9m ----- SmFixed
+--2197318:1: aspacem >>>
+--2197318:1:    main 
+--2197318:1:    main 
+--2197318:1:    main Running thread 1
+--2197318:1:syswrap- entering VG_(main_thread_wrapper_NORETURN)
+--2197318:1: aspacem allocated valgrind thread stack at 0x100278c000 size 1064960
+--2197318:1:syswrap- run_a_thread_NORETURN(tid=1): pre-thread_wrapper
+--2197318:1:syswrap- thread_wrapper(tid=1,lwpid=2197318): entry
+--2197318:1:  gdbsrv entering call_gdbserver init_reason ... pid 2197318 tid 1 status VgTs_Runnable sched_jmpbuf_valid 0
+--2197318:1:  gdbsrv gdbserver_init gdbserver embedded in valgrind: gdbserver protocol box extracted from gdb 6.6
+--2197318:1:  gdbsrv ptrace_scope 1
+--2197318:1:  gdbsrv set_ptracer to PR_SET_PTRACER_ANY result 0
+--2197318:1:  gdbsrv Opening read side /tmp/vgdb-pipe-from-vgdb-to-2197318-by-dreyex-on-???
+--2197318:1:  gdbsrv result fd 3
+--2197318:1:  gdbsrv result safe_fd 1030
+--2197318:1:mallocfr newSuperblock at 0x1004357000 (pszB   65504)  owner VALGRIND/ttaux
+--2197318:1: signals extending a stack base 0x1ffeffe000 down by 4096 new base 0x1ffeffd000 to cover 0x1ffeffd000
+--2197318:1:mallocfr newSuperblock at 0x1004367000 (pszB   65504)  owner VALGRIND/ttaux
+--2197318:1:hashtabl resizing table `di.storage.addStr.1' from 769 to 1543 (total elems 770)
+--2197318:1:hashtabl resizing table `di.storage.addStr.1' from 1543 to 3079 (total elems 1544)
+--2197318:1:mallocfr newSuperblock at 0x1004377000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:mallocfr newSuperblock at 0x1004477000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:mallocfr deferred_reclaimSuperblock at 0x1004377000 (pszB 1048544)  (prev 0x0) owner VALGRIND/dinfo
+--2197318:1:hashtabl resizing table `di.storage.addStr.1' from 3079 to 6151 (total elems 3080)
+--2197318:1:hashtabl resizing table `di.storage.addStr.1' from 6151 to 12289 (total elems 6152)
+--2197318:1:mallocfr deferred_reclaimSuperblock NULL (prev 0x1004377000) owner VALGRIND/dinfo
+--2197318:1:mallocfr newSuperblock at 0x1004577000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:mallocfr newSuperblock at 0x1004677000 (pszB 2482144) unsplittable owner VALGRIND/dinfo
+--2197318:1:mallocfr newSuperblock at 0x10048D5000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:mallocfr newSuperblock at 0x10049D5000 (pszB 6115296) unsplittable owner VALGRIND/dinfo
+--2197318:1:mallocfr reclaimSuperblock at 0x1004677000 (pszB 2482144) unsplittable owner VALGRIND/dinfo
+--2197318:1:mallocfr newSuperblock at 0x1004677000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:mallocfr newSuperblock at 0x1004777000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:mallocfr newSuperblock at 0x1004FAA000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:mallocfr newSuperblock at 0x10050AA000 (pszB 1433568) unsplittable owner VALGRIND/dinfo
+--2197318:1:hashtabl resizing table `di.storage.addFnDn.1' from 769 to 1543 (total elems 770)
+--2197318:1:mallocfr newSuperblock at 0x1005208000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:hashtabl resizing table `di.storage.addFnDn.1' from 1543 to 3079 (total elems 1544)
+--2197318:1:mallocfr newSuperblock at 0x1005308000 (pszB 2052064) unsplittable owner VALGRIND/dinfo
+--2197318:1:mallocfr deferred_reclaimSuperblock at 0x1005208000 (pszB 1048544)  (prev 0x0) owner VALGRIND/dinfo
+--2197318:1:mallocfr deferred_reclaimSuperblock NULL (prev 0x1005208000) owner VALGRIND/dinfo
+--2197318:1:mallocfr reclaimSuperblock at 0x1005208000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:mallocfr newSuperblock at 0x10054FD000 (pszB 4100064) unsplittable owner VALGRIND/dinfo
+--2197318:1:mallocfr newSuperblock at 0x1005208000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:mallocfr reclaimSuperblock at 0x1005308000 (pszB 2052064) unsplittable owner VALGRIND/dinfo
+--2197318:1:hashtabl resizing table `di.storage.addFnDn.1' from 3079 to 6151 (total elems 3080)
+--2197318:1:mallocfr reclaimSuperblock at 0x10050AA000 (pszB 1433568) unsplittable owner VALGRIND/dinfo
+--2197318:1:mallocfr reclaimSuperblock at 0x10049D5000 (pszB 6115296) unsplittable owner VALGRIND/dinfo
+--2197318:1:mallocfr deferred_reclaimSuperblock at 0x1004777000 (pszB 1048544)  (prev 0x0) owner VALGRIND/dinfo
+--2197318:1:mallocfr deferred_reclaimSuperblock at 0x10048D5000 (pszB 1048544)  (prev 0x1004777000) owner VALGRIND/dinfo
+--2197318:1:mallocfr reclaimSuperblock at 0x1004777000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:mallocfr deferred_reclaimSuperblock at 0x10048D5000 (pszB 1048544)  (prev 0x10048D5000) owner VALGRIND/dinfo
+--2197318:1:mallocfr shrink superblock 0x10054FD000 to (pszB 2764768) owner VALGRIND/dinfo (munmap-ing 0x10057A0000 1335296)
+--2197318:1:mallocfr deferred_reclaimSuperblock at 0x1004477000 (pszB 1048544)  (prev 0x10048D5000) owner VALGRIND/dinfo
+--2197318:1:mallocfr reclaimSuperblock at 0x10048D5000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:mallocfr deferred_reclaimSuperblock NULL (prev 0x1004477000) owner VALGRIND/dinfo
+--2197318:1:mallocfr reclaimSuperblock at 0x1004477000 (pszB 1048544)  owner VALGRIND/dinfo
+--2197318:1:mallocfr newSuperblock at 0x1004477000 (pszB   65504)  owner VALGRIND/ttaux
+--2197318:1:syswrap- thread_wrapper(tid=1,lwpid=2197318): exit, schedreturncode VgSrc_ExitThread
+--2197318:1:syswrap- run_a_thread_NORETURN(tid=1): post-thread_wrapper
+--2197318:1:syswrap- run_a_thread_NORETURN(tid=1): last one standing
+--2197318:1:    main entering VG_(shutdown_actions_NORETURN)
+--2197318:1: aspacem <<< SHOW_SEGMENTS: Memory layout at client shutdown (64 segments)
+--2197318:1: aspacem 6 segment names in 7 slots
+--2197318:1: aspacem freelist begins at 305
+--2197318:1: aspacem (0,4,9) /home/dreyex/Documents/Research/PPT/cachegrind/cachegrind-amd64-linux
+--2197318:1: aspacem (1,78,8) /home/dreyex/use_this/jacobi-2d
+--2197318:1: aspacem (2,114,8) /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+--2197318:1: aspacem (3,165,1) /tmp/vgdb-pipe-shared-mem-vgdb-2197318-by-dreyex-on-???
+--2197318:1: aspacem (4,225,8) /home/dreyex/Documents/Research/PPT/coregrind/vgpreload_core-amd64-linux.so
+--2197318:1: aspacem (5,305,0) [free slot: size=17  next=0]
+--2197318:1: aspacem (6,326,8) /usr/lib/x86_64-linux-gnu/libc.so.6
+--2197318:1: aspacem   0: RSVN 0000000000-0000107fff 1081344 ----- SmFixed
+--2197318:1: aspacem   1: file 0000108000-0000108fff    4096 r---- d=0x10303 i=55967922 o=0       (1,78)
+--2197318:1: aspacem   2: file 0000109000-0000109fff    4096 r-xT- d=0x10303 i=55967922 o=4096    (1,78)
+--2197318:1: aspacem   3: file 000010a000-000010afff    4096 r---- d=0x10303 i=55967922 o=8192    (1,78)
+--2197318:1: aspacem   4: file 000010b000-000010bfff    4096 r---- d=0x10303 i=55967922 o=8192    (1,78)
+--2197318:1: aspacem   5: file 000010c000-000010cfff    4096 rw--- d=0x10303 i=55967922 o=12288   (1,78)
+--2197318:1: aspacem   6: RSVN 000010d000-0003ffffff     62m ----- SmFixed
+--2197318:1: aspacem   7: file 0004000000-0004001fff    8192 r---- d=0x10303 i=24907330 o=0       (2,114)
+--2197318:1: aspacem   8: file 0004002000-000402bfff  172032 r-xT- d=0x10303 i=24907330 o=8192    (2,114)
+--2197318:1: aspacem   9: file 000402c000-0004036fff   45056 r---- d=0x10303 i=24907330 o=180224  (2,114)
+--2197318:1: aspacem  10:      0004037000-0004037fff    4096
+--2197318:1: aspacem  11: file 0004038000-0004039fff    8192 r---- d=0x10303 i=24907330 o=225280  (2,114)
+--2197318:1: aspacem  12: file 000403a000-000403bfff    8192 rw--- d=0x10303 i=24907330 o=233472  (2,114)
+--2197318:1: aspacem  13: anon 000403c000-000405dfff  139264 rwx--
+--2197318:1: aspacem  14: RSVN 000405e000-000483bfff 8249344 ----- SmLower
+--2197318:1: aspacem  15: anon 000483c000-000483dfff    8192 rw---
+--2197318:1: aspacem  16: file 000483e000-000483efff    4096 r---- d=0x10303 i=58629001 o=0       (4,225)
+--2197318:1: aspacem  17: file 000483f000-000483ffff    4096 r-xT- d=0x10303 i=58629001 o=4096    (4,225)
+--2197318:1: aspacem  18: file 0004840000-0004840fff    4096 r---- d=0x10303 i=58629001 o=8192    (4,225)
+--2197318:1: aspacem  19: file 0004841000-0004841fff    4096 r---- d=0x10303 i=58629001 o=8192    (4,225)
+--2197318:1: aspacem  20: file 0004842000-0004842fff    4096 rw--- d=0x10303 i=58629001 o=12288   (4,225)
+--2197318:1: aspacem  21:      0004843000-000485dfff  110592
+--2197318:1: aspacem  22: file 000485e000-0004885fff  163840 r---- d=0x10303 i=24907336 o=0       (6,326)
+--2197318:1: aspacem  23: file 0004886000-0004a1afff 1658880 r-xT- d=0x10303 i=24907336 o=163840  (6,326)
+--2197318:1: aspacem  24: file 0004a1b000-0004a72fff  360448 r---- d=0x10303 i=24907336 o=1822720 (6,326)
+--2197318:1: aspacem  25: file 0004a73000-0004a76fff   16384 r---- d=0x10303 i=24907336 o=2179072 (6,326)
+--2197318:1: aspacem  26: file 0004a77000-0004a78fff    8192 rw--- d=0x10303 i=24907336 o=2195456 (6,326)
+--2197318:1: aspacem  27: anon 0004a79000-0004a88fff   65536 rw---
+--2197318:1: aspacem  28:      0004a89000-0057ffffff   1333m
+--2197318:1: aspacem  29: FILE 0058000000-0058000fff    4096 r---- d=0x10303 i=58626974 o=0       (0,4)
+--2197318:1: aspacem  30: FILE 0058001000-0058086fff  548864 r-x-- d=0x10303 i=58626974 o=4096    (0,4)
+--2197318:1: aspacem  31: file 0058087000-0058087fff    4096 r-x-- d=0x10303 i=58626974 o=552960  (0,4)
+--2197318:1: aspacem  32: FILE 0058088000-00581a9fff 1187840 r-x-- d=0x10303 i=58626974 o=557056  (0,4)
+--2197318:1: aspacem  33: FILE 00581aa000-0058240fff  618496 r---- d=0x10303 i=58626974 o=1744896 (0,4)
+--2197318:1: aspacem  34:      0058241000-0058241fff    4096
+--2197318:1: aspacem  35: FILE 0058242000-0058246fff   20480 rw--- d=0x10303 i=58626974 o=2363392 (0,4)
+--2197318:1: aspacem  36: ANON 0058247000-0058c3efff      9m rw---
+--2197318:1: aspacem  37:      0058c3f000-1001ffffff  64147m
+--2197318:1: aspacem  38: RSVN 1002000000-1002000fff    4096 ----- SmFixed
+--2197318:1: aspacem  39: ANON 1002001000-100278bfff 7909376 rwx--
+--2197318:1: aspacem  40: ANON 100278c000-100278dfff    8192 -----
+--2197318:1: aspacem  41: ANON 100278e000-100288dfff 1048576 rwx--
+--2197318:1: aspacem  42: ANON 100288e000-100288ffff    8192 -----
+--2197318:1: aspacem  43: FILE 1002890000-1002890fff    4096 rw--- d=0x10303 i=44302480 o=0       (3,165)
+--2197318:1: aspacem  44: ANON 1002891000-1004486fff     27m rwx--
+--2197318:1: aspacem  45:      1004487000-1004576fff  983040
+--2197318:1: aspacem  46: ANON 1004577000-1004776fff 2097152 rwx--
+--2197318:1: aspacem  47:      1004777000-1004fa9fff 8597504
+--2197318:1: aspacem  48: ANON 1004faa000-10050a9fff 1048576 rwx--
+--2197318:1: aspacem  49:      10050aa000-1005207fff 1433600
+--2197318:1: aspacem  50: ANON 1005208000-1005307fff 1048576 rwx--
+--2197318:1: aspacem  51:      1005308000-10054fcfff 2052096
+--2197318:1: aspacem  52: ANON 10054fd000-100579ffff 2764800 rwx--
+--2197318:1: aspacem  53:      10057a0000-1ffe800fff  65424m
+--2197318:1: aspacem  54: RSVN 1ffe801000-1ffeffcfff 8372224 ----- SmUpper
+--2197318:1: aspacem  55: anon 1ffeffd000-1fff000fff   16384 rw---
+--2197318:1: aspacem  56:      1fff001000-1fffffffff     15m
+--2197318:1: aspacem  57: RSVN 2000000000-7ffcd4efafff 130931g ----- SmFixed
+--2197318:1: aspacem  58: ANON 7ffcd4efb000-7ffcd4f1cfff  139264 rw---
+--2197318:1: aspacem  59: RSVN 7ffcd4f1d000-7ffcd4fd5fff  757760 ----- SmFixed
+--2197318:1: aspacem  60: ANON 7ffcd4fd6000-7ffcd4fd9fff   16384 r----
+--2197318:1: aspacem  61: RSVN 7ffcd4fda000-ffffffffff5fffff  16383e ----- SmFixed
+--2197318:1: aspacem  62: ANON ffffffffff600000-ffffffffff600fff    4096 --x--
+--2197318:1: aspacem  63: RSVN ffffffffff601000-ffffffffffffffff      9m ----- SmFixed
+--2197318:1: aspacem >>>
+--2197318:1:  gdbsrv VG core calling VG_(gdbserver_exit) tid 1 will exit
+--2197318:1:  gdbsrv not connected
+--2197318:1:  gdbsrv remote_finish (reason orderly_finish) 1030 -1
+--2197318:1:  gdbsrv 2197318 (creator 2197318) maybe unlinking 
+    /tmp/vgdb-pipe-from-vgdb-to-2197318-by-dreyex-on-???
+    /tmp/vgdb-pipe-to-vgdb-from-2197318-by-dreyex-on-???
+    /tmp/vgdb-pipe-shared-mem-vgdb-2197318-by-dreyex-on-???
+--2197318:1: core_os VG_(terminate_NORETURN)(tid=1) schedretcode VgSrc_ExitThread os_state.exit_code 0 fatalsig 0
+There are 0 line of output to here

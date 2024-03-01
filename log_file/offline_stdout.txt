@@ -1,0 +1,32 @@
+detected at --2221109-- Valgrind options:
+detected at --2221109--    --tool=cachegrind
+detected at --2221109--    --instr-at-start=no
+detected at --2221109--    --cache-sim=yes
+detected at --2221109--    --D1=49152,12,64
+detected at --2221109--    --I1=32768,8,64
+detected at --2221109--    --L2=1310720,10,64
+detected at --2221109--    -v
+detected at --2221109--    -d
+detected at --2221109--    --log-fd=1
+detected at --2221109-- Contents of /proc/version:
+detected at --2221109--   Linux version 5.15.0-84-generic (buildd@lcy02-amd64-005) (gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #93-Ubuntu SMP Tue Sep 5 17:16:10 UTC 2023
+detected at --2221109-- 
+detected at --2221109-- Arch and hwcaps: AMD64, LittleEndian, amd64-cx16-lzcnt-rdtscp-sse3-ssse3-avx-avx2-bmi-f16c-rdrand-rdseed
+detected at --2221109-- Page sizes: currently 4096, max supported 4096
+detected at --2221109-- Valgrind library directory: /home/dreyex/Documents/Research/PPT/./.in_place
+detected at --2221109-- warning: L3 cache found, using its data for the LL simulation.
+detected at --2221109-- warning: specified LL cache: line_size 64  assoc 10  total_size 26,214,400
+detected at --2221109-- warning: simulated LL cache: line_size 64  assoc 13  total_size 27,262,976
+detected at --2221109-- Reading syms from /home/dreyex/use_this/jacobi-2d
+detected at --2221109-- Reading syms from /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+detected at --2221109-- Reading syms from /home/dreyex/Documents/Research/PPT/cachegrind/cachegrind-amd64-linux
+detected at --2221109--    object doesn't have a dynamic symbol table
+detected at --2221109-- Scheduler: using generic scheduler lock implementation.
+detected at --2221109-- transtab: allocate sector 0
+detected at --2221109-- Reading syms from /home/dreyex/Documents/Research/PPT/coregrind/vgpreload_core-amd64-linux.so
+detected at --2221109-- Reading syms from /usr/lib/x86_64-linux-gnu/libc.so.6
+detected at --2221109--   Considering /usr/lib/debug/.build-id/22/9b7dc509053fe4df5e29e8629911f0c3bc66dd.debug ..
+detected at --2221109--   .. build-id is valid
+detected at --2221109-- warning: CACHEGRIND_STOP_INSTRUMENTATION called,
+detected at --2221109--          but instrumentation is already disabled
+There are 31 line of output to here
