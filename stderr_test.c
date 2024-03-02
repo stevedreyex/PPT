@@ -26,6 +26,7 @@ int main() {
     close(pipe_fd[0]);
 
     // Redirect stdout to the pipe
+  // It's magic, read from STDOUT and use VG_(message)(Vg_ClientMsg ... ) can send to the pipe
     dup2(pipe_fd[1], STDOUT_FILENO);
 
     // Close unused pipe descriptors
@@ -40,6 +41,8 @@ int main() {
     }
 
     // Execute Program A
+    // Since pass the program by arvg is sophisticated, we use execl with fixed path instead
+    // What if then we have to run the batch of benchmarks?
     execl("/home/dreyex/Documents/Research/PPT/./vg-in-place", "vg-in-place",
           "--tool=cachegrind", "--instr-at-start=no", "--cache-sim=yes",
           "--D1=49152,12,64", "--I1=32768,8,64", "--L2=1310720,10,64", "-v",
