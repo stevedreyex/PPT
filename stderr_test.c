@@ -4,10 +4,33 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <isl/arg.h>
+#include <isl/ctx.h>
+#include <isl/options.h>
+#include <isl/schedule_node.h>
+
+#include "pet/options.h"
+#include "pet/scop.h"
+#include "pet/scop_yaml.h"
+
+struct options {
+	struct isl_options	*isl;
+	struct pet_options	*pet;
+	char			*input;
+};
+
+ISL_ARGS_START(struct options, options_args)
+ISL_ARG_CHILD(struct options, isl, "isl", &isl_options_args, "isl options")
+ISL_ARG_CHILD(struct options, pet, NULL, &pet_options_args, "pet options")
+ISL_ARG_ARG(struct options, input, "input", NULL)
+ISL_ARGS_END
+
+ISL_ARG_DEF(options, struct options, options_args)
+
+
 #define BUFFER_SIZE 1024 // Increased buffer size
 
-int main() {
-
+int main(int argc, char *argv[]) {
 
   FILE *fp;
   int compilation_unit = 0;
@@ -20,7 +43,7 @@ int main() {
   }
 
   // Open the command for reading
-  fp = popen("readelf --debug-dump=info /home/dreyex/use_this/jacobi-2d", "r");
+  fp = popen("readelf --debug-dump=info /home/dreyex/use_this/obj/jacobi-2d", "r");
   if (fp == NULL) {
       printf("Failed to run command\n");
       exit(1);
@@ -38,32 +61,27 @@ int main() {
         // printf("touched\n");
         // printf("%s", prev_line);
         // printf("%s", path);
-        char *colon_pos_comp = strchr(path, ':');
         char *colon_pos_name = strchr(prev_line, ':');
-        for (int i = 0; i < 2 && colon_pos_comp != NULL; i++) {
-            colon_pos_comp = strchr(colon_pos_comp + 1, ':');
-        }
         for (int i = 0; i < 2 && colon_pos_name != NULL; i++) {
             colon_pos_name = strchr(colon_pos_name + 1, ':');
         }
-        colon_pos_comp += 2;
         colon_pos_name += 2;
-        colon_pos_comp[strcspn(colon_pos_comp, "\n")] = '\0';
         colon_pos_name[strcspn(colon_pos_name, "\n")] = '\0';
-        if (colon_pos_comp != NULL && colon_pos_name != NULL) {
-            // Print the substring starting from the position after the third colon
-            // printf("%s/%s\n", colon_pos_comp , colon_pos_name);
-            // if the colon_pos_name starts with .., trim *.c from the path
-            if (colon_pos_name[0] == '.' && colon_pos_name[1] == '.') {
-                unit[compilation_unit] = malloc(strlen(colon_pos_comp) + strlen(colon_pos_name) + 2);
-                strcpy(unit[compilation_unit], colon_pos_comp);
-                strcat(unit[compilation_unit], "/");
-                strncat(unit[compilation_unit], colon_pos_name, strlen(colon_pos_name) - 2);
+        if (colon_pos_name != NULL) {
+            // is a inclue path
+            if (compilation_unit) {
+                unit[compilation_unit] = malloc(strlen(colon_pos_name) + 1);
+                // copy content and discard contents after 
+                char *last_slash = strrchr(colon_pos_name, '/');
+                if (last_slash != NULL) {
+                    //remove last_slash in colon_pos_name
+                    *last_slash = '\0';
+                } 
+                strcpy(unit[compilation_unit], colon_pos_name);
+            // Where tha main at
             } else {
-                unit[compilation_unit] = malloc(strlen(colon_pos_comp) + strlen(colon_pos_name) + 2);
-                strcpy(unit[compilation_unit], colon_pos_comp);
-                strcat(unit[compilation_unit], "/");
-                strcat(unit[compilation_unit], colon_pos_name);
+                unit[compilation_unit] = malloc(strlen(colon_pos_name) + 1);
+                strcpy(unit[compilation_unit], colon_pos_name);
             }
             compilation_unit++;
         }
@@ -91,6 +109,47 @@ int main() {
     perror("pipe");
     exit(EXIT_FAILURE);
   }
+
+  // with -I flag, at least 2x
+  char *arg_list[2*compilation_unit];
+  int arg_count = 0;
+  isl_ctx *ctx;
+	struct pet_scop *scop;
+	struct options *options;
+  isl_schedule *schedule;
+  char *incl = malloc(strlen("-I") + 1);
+  strcpy(incl, "-I");
+
+  arg_list[arg_count] = argv[0];
+  arg_count++;
+
+  for (int i  = 0; i < compilation_unit; i++) {
+    if (!i){
+      arg_list[arg_count] = unit[i];
+      arg_count++;
+    } else {
+      arg_list[arg_count] = incl;
+      arg_count++;
+      arg_list[arg_count] = unit[i];
+      arg_count++;
+    }
+  }
+
+  // print the arg_list
+  #ifdef DEBUG
+  for (int i = 0; i < arg_count; i++) {
+    printf("%s\n", arg_list[i]);
+  }
+  #endif
+
+	options = options_new_with_defaults();
+	ctx = isl_ctx_alloc_with_options(&options_args, options);
+	arg_count = options_parse(options, arg_count, arg_list, ISL_ARG_ALL);
+
+	scop = pet_scop_extract_from_C_source(ctx, options->input, NULL);
+  schedule = pet_scop_get_schedule(scop);
+  isl_schedule_dump(schedule);
+
 
   // Fork a child process
   pid_t pid = fork();
