@@ -71,6 +71,7 @@ int main() {
       // Save the current line to prev_line
       strcpy(prev_line, path);
   }
+  #ifdef DEBUG
   if (compilation_unit == 0) {
       printf("No DW_AT_name and DW_AT_comp_dir found\n");
   } else {
@@ -80,6 +81,7 @@ int main() {
           printf("%s\n", unit[i]);
       }
   }
+  #endif
   // Close the pipe
   pclose(fp);
 
