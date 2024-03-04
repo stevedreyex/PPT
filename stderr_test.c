@@ -7,6 +7,82 @@
 #define BUFFER_SIZE 1024 // Increased buffer size
 
 int main() {
+
+
+  FILE *fp;
+  int compilation_unit = 0;
+  char path[1035];
+  char prev_line[1035] = "";
+  char **unit = malloc(10 * sizeof(char *));
+  //init the array, assume there's only 10 compilation unit
+  for (int i = 0; i < 10; i++) {
+    unit[i] = NULL;
+  }
+
+  // Open the command for reading
+  fp = popen("readelf --debug-dump=info /home/dreyex/use_this/jacobi-2d", "r");
+  if (fp == NULL) {
+      printf("Failed to run command\n");
+      exit(1);
+  }
+
+  // Read the output line by line and process it
+  while (fgets(path, sizeof(path), fp) != NULL) {
+      // Check if the current line contains DW_AT_name
+      // printf("%s\n\n", path);
+      // Check if the previous line contains DW_AT_comp_dir
+      if (strstr(prev_line, "DW_AT_name") != NULL) {
+          // Print DW_AT_name and DW_AT_comp_dir
+      }
+      if (strstr(path, "DW_AT_comp_dir") != NULL) {
+        // printf("touched\n");
+        // printf("%s", prev_line);
+        // printf("%s", path);
+        char *colon_pos_comp = strchr(path, ':');
+        char *colon_pos_name = strchr(prev_line, ':');
+        for (int i = 0; i < 2 && colon_pos_comp != NULL; i++) {
+            colon_pos_comp = strchr(colon_pos_comp + 1, ':');
+        }
+        for (int i = 0; i < 2 && colon_pos_name != NULL; i++) {
+            colon_pos_name = strchr(colon_pos_name + 1, ':');
+        }
+        colon_pos_comp += 2;
+        colon_pos_name += 2;
+        colon_pos_comp[strcspn(colon_pos_comp, "\n")] = '\0';
+        colon_pos_name[strcspn(colon_pos_name, "\n")] = '\0';
+        if (colon_pos_comp != NULL && colon_pos_name != NULL) {
+            // Print the substring starting from the position after the third colon
+            // printf("%s/%s\n", colon_pos_comp , colon_pos_name);
+            // if the colon_pos_name starts with .., trim *.c from the path
+            if (colon_pos_name[0] == '.' && colon_pos_name[1] == '.') {
+                unit[compilation_unit] = malloc(strlen(colon_pos_comp) + strlen(colon_pos_name) + 2);
+                strcpy(unit[compilation_unit], colon_pos_comp);
+                strcat(unit[compilation_unit], "/");
+                strncat(unit[compilation_unit], colon_pos_name, strlen(colon_pos_name) - 2);
+            } else {
+                unit[compilation_unit] = malloc(strlen(colon_pos_comp) + strlen(colon_pos_name) + 2);
+                strcpy(unit[compilation_unit], colon_pos_comp);
+                strcat(unit[compilation_unit], "/");
+                strcat(unit[compilation_unit], colon_pos_name);
+            }
+            compilation_unit++;
+        }
+      }
+      // Save the current line to prev_line
+      strcpy(prev_line, path);
+  }
+  if (compilation_unit == 0) {
+      printf("No DW_AT_name and DW_AT_comp_dir found\n");
+  } else {
+    // DEBUG
+      printf("There are %d compilation unit\n", compilation_unit);
+      for (int i = 0; i < compilation_unit; i++) {
+          printf("%s\n", unit[i]);
+      }
+  }
+  // Close the pipe
+  pclose(fp);
+
   // Create pipe descriptors
   int pipe_fd[2];
   if (pipe(pipe_fd) == -1) {
@@ -75,6 +151,9 @@ int main() {
       // Check if there is a complete line in the cache
       char *line_start = cache;
       char *line_end;
+      char access;
+      int line_no, size;
+      long long int addr;
       while ((line_end = strchr(line_start, '\n')) != NULL) {
         // Null-terminate the line
         *line_end = '\0';
@@ -82,7 +161,12 @@ int main() {
         // Check if the line starts with '%'
         if (line_start[0] == '*') {
           // Output the line
-          printf("detected at %s\n", line_start);
+          // printf("detected at %s\n", line_start);
+          sscanf(line_start, "**%*d** %c %d %llx %d", &access, &line_no, &addr, &size);
+
+          // Output parsed values
+          // printf("Access: %c, Line No: %d, Address: 0x%.10llx, Size: %d\n", access, line_no, addr, size);
+    
           counter++;
         }
 
