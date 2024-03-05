@@ -1,6 +1,3 @@
-[submodule "pet"]
-	path = pet
-	url = git@github.com:Meinersbur/pet.git
-[submodule "isl"]
-	path = isl
-	url = git@github.com:Meinersbur/isl.git
+[submodule "ppcg"]
+	path = ppcg
+	url = git@github.com:stevedreyex/ppcg-ppt.git
