@@ -27,6 +27,8 @@ ISL_ARGS_END
 
 ISL_ARG_DEF(options, struct options, options_args)
 
+char *prog_path;    // argv[1]
+char *ppcg_launch;  // argv[2]
 
 #define BUFFER_SIZE 1024 // Increased buffer size
 
@@ -48,7 +50,9 @@ int parse_dwarf(char **unit){
   }
 
   // Open the command for reading
-  fp = popen("readelf --debug-dump=info /home/dreyex/use_this/obj/jacobi-2d", "r");
+  char cmd[BUFFER_SIZE];
+  snprintf(cmd,BUFFER_SIZE-1, "readelf --debug-dump=info %s", prog_path);
+  fp = popen(cmd, "r");
   if (fp == NULL) {
       printf("Failed to run command\n");
       exit(1);
@@ -100,6 +104,16 @@ int parse_dwarf(char **unit){
   return compilation_unit;
 }
 
+void replaceString(char *str, const char *oldSubstr, const char *newSubstr) {
+    char *pos = strstr(str, oldSubstr);
+    if (pos != NULL) {
+        int oldSubstrLen = strlen(oldSubstr);
+        int newSubstrLen = strlen(newSubstr);
+        memmove(pos + newSubstrLen, pos + oldSubstrLen, strlen(pos + oldSubstrLen) + 1);
+        memcpy(pos, newSubstr, newSubstrLen);
+    }
+}
+
 /*
  * Instead of calculating the schedule from the pet_scop, we can use ppcg to do that
  * @param out char *arg_list: the list of argument to pass to ppcg
@@ -115,24 +129,35 @@ int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit) {
 	struct pet_scop *scop;
 	struct options *options;
   isl_schedule *schedule;
-  char *incl = malloc(strlen("-I") + 1);
-  strcpy(incl, "-I");
+  char *incl = "-I";
 
   // arg_list[arg_count] = argv[0];
   // arg_count++;
-  char *ppcg_path = "/home/dreyex/ppcg-looptactics/ppcg ";
-  char *ppcg_call = malloc(strlen(ppcg_path) + 1);
+  char ppcg_args[BUFFER_SIZE/2] = {0};
+  char ppcg_call[BUFFER_SIZE] = {0};
 
   // Concatenate all args to make a ppcg call
-  strcpy(ppcg_call, ppcg_path);
   for (int i = 0; i < compilation_unit; i++) {
     if (i)
-      strcat(ppcg_call, incl);
-    strcat(ppcg_call, unit[i]);
-    strcat(ppcg_call, " ");
+      strcat(ppcg_args, incl);
+    strcat(ppcg_args, unit[i]);
+    strcat(ppcg_args, " ");
     arg_count++;
   }
-  strcat(ppcg_call, "--save-schedule=/home/dreyex/use_this/schedule/jacobi-2d.sched");
+
+  char sched[BUFFER_SIZE/4];
+  strcpy(sched, prog_path);
+  char newSubstr[] = "/schedule/";
+  char addition[] = ".sched";
+  
+  // Step 1: Replace "/obj/" with "/schedule/"
+  replaceString(sched, "/obj/", newSubstr);
+
+  // Step 2: Append "sched" at the end
+  strcat(sched, addition);
+  // strcat(ppcg_call, "--save-schedule=/home/dreyex/use_this/schedule/jacobi-2d.sched");
+  
+  snprintf(ppcg_call, BUFFER_SIZE-1, "%s %s --save-schedule=%s", ppcg_launch, ppcg_args, sched);
   #ifdef DEBUG
   printf("ppcg call: %s\n", ppcg_call);
   #endif
@@ -143,14 +168,20 @@ int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit) {
       ret = NULL;
   }
   pclose(fp);
-  free(incl);
-  free(ppcg_call);
 
   return arg_count;
 }
 
+
+/*
+ * Program initialization
+ * argv[1]: the path to the binary
+ * argv[2]: ppcg launch path
+ */
 int main(int argc, char *argv[]) {
   // initialize 10 ptr to store ppcg call path
+  prog_path = argv[1];
+  ppcg_launch = argv[2];
   char *ret;
   char **unit = malloc(10 * sizeof(char *));
   int compilation_unit = parse_dwarf(unit);
