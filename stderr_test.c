@@ -30,13 +30,18 @@ ISL_ARG_DEF(options, struct options, options_args)
 
 #define BUFFER_SIZE 1024 // Increased buffer size
 
-int main(int argc, char *argv[]) {
+/*
+ * Parse the DWARF information from the binary
+ * @param out char **unit: the array of compiled source path
+ * @return int: number of compilation unit
+ */
+int parse_dwarf(char **unit){
 
   FILE *fp;
   int compilation_unit = 0;
   char path[1035];
   char prev_line[1035] = "";
-  char **unit = malloc(10 * sizeof(char *));
+  
   //init the array, assume there's only 10 compilation unit
   for (int i = 0; i < 10; i++) {
     unit[i] = NULL;
@@ -89,6 +94,66 @@ int main(int argc, char *argv[]) {
       // Save the current line to prev_line
       strcpy(prev_line, path);
   }
+
+  // Close the pipe
+  pclose(fp);
+  return compilation_unit;
+}
+
+/*
+ * Instead of calculating the schedule from the pet_scop, we can use ppcg to do that
+ * @param out char *arg_list: the list of argument to pass to ppcg
+ * @param int compilation_unit: the number of compilation unit
+ * @return int arg_count: the number of arguments for ppcg
+ */
+int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit) {
+  // with -I flag, at least 2x
+  
+  int arg_count = 0;
+  char *arg_list[2*compilation_unit];
+  isl_ctx *ctx;
+	struct pet_scop *scop;
+	struct options *options;
+  isl_schedule *schedule;
+  char *incl = malloc(strlen("-I") + 1);
+  strcpy(incl, "-I");
+
+  // arg_list[arg_count] = argv[0];
+  // arg_count++;
+  char *ppcg_path = "/home/dreyex/ppcg-looptactics/ppcg ";
+  char *ppcg_call = malloc(strlen(ppcg_path) + 1);
+
+  // Concatenate all args to make a ppcg call
+  strcpy(ppcg_call, ppcg_path);
+  for (int i = 0; i < compilation_unit; i++) {
+    if (i)
+      strcat(ppcg_call, incl);
+    strcat(ppcg_call, unit[i]);
+    strcat(ppcg_call, " ");
+    arg_count++;
+  }
+  strcat(ppcg_call, "--save-schedule=/home/dreyex/use_this/schedule/jacobi-2d.sched");
+  #ifdef DEBUG
+  printf("ppcg call: %s\n", ppcg_call);
+  #endif
+  FILE *fp;
+  fp = popen(ppcg_call, "r");
+  if (fp == NULL) {
+      printf("Failed to run command\n");
+      ret = NULL;
+  }
+  pclose(fp);
+  free(incl);
+  free(ppcg_call);
+
+  return arg_count;
+}
+
+int main(int argc, char *argv[]) {
+  // initialize 10 ptr to store ppcg call path
+  char *ret;
+  char **unit = malloc(10 * sizeof(char *));
+  int compilation_unit = parse_dwarf(unit);
   #ifdef DEBUG
   if (compilation_unit == 0) {
       printf("No DW_AT_name and DW_AT_comp_dir found\n");
@@ -100,8 +165,27 @@ int main(int argc, char *argv[]) {
       }
   }
   #endif
-  // Close the pipe
-  pclose(fp);
+  int arg_count = get_computed_sched_from_ppcg(unit, ret, compilation_unit);
+
+  if(!ret){
+    printf("Error: ppcg call failed\n");
+    return 1;
+  }
+
+  // // print the arg_list
+  // #ifdef DEBUG
+  // for (int i = 0; i < arg_count; i++) {
+  //   printf("%s\n", arg_list[i]);
+  // }
+  // #endif
+
+	// options = options_new_with_defaults();
+	// ctx = isl_ctx_alloc_with_options(&options_args, options);
+	// arg_count = options_parse(options, arg_count, arg_list, ISL_ARG_ALL);
+
+	// scop = pet_scop_extract_from_C_source(ctx, options->input, NULL);
+  // schedule = pet_scop_get_schedule(scop);
+  // isl_schedule_dump(schedule);
 
   // Create pipe descriptors
   int pipe_fd[2];
@@ -109,47 +193,6 @@ int main(int argc, char *argv[]) {
     perror("pipe");
     exit(EXIT_FAILURE);
   }
-
-  // with -I flag, at least 2x
-  char *arg_list[2*compilation_unit];
-  int arg_count = 0;
-  isl_ctx *ctx;
-	struct pet_scop *scop;
-	struct options *options;
-  isl_schedule *schedule;
-  char *incl = malloc(strlen("-I") + 1);
-  strcpy(incl, "-I");
-
-  arg_list[arg_count] = argv[0];
-  arg_count++;
-
-  for (int i  = 0; i < compilation_unit; i++) {
-    if (!i){
-      arg_list[arg_count] = unit[i];
-      arg_count++;
-    } else {
-      arg_list[arg_count] = incl;
-      arg_count++;
-      arg_list[arg_count] = unit[i];
-      arg_count++;
-    }
-  }
-
-  // print the arg_list
-  #ifdef DEBUG
-  for (int i = 0; i < arg_count; i++) {
-    printf("%s\n", arg_list[i]);
-  }
-  #endif
-
-	options = options_new_with_defaults();
-	ctx = isl_ctx_alloc_with_options(&options_args, options);
-	arg_count = options_parse(options, arg_count, arg_list, ISL_ARG_ALL);
-
-	scop = pet_scop_extract_from_C_source(ctx, options->input, NULL);
-  schedule = pet_scop_get_schedule(scop);
-  isl_schedule_dump(schedule);
-
 
   // Fork a child process
   pid_t pid = fork();
@@ -256,5 +299,10 @@ int main(int argc, char *argv[]) {
     waitpid(pid, &status, 0);
   }
 
+  // Free the array of ptr
+  for (int i = 0; i < compilation_unit; i++) {
+    free(unit[i]);
+  }
+  free(unit);
   return 0;
 }
