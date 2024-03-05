@@ -125,10 +125,6 @@ int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit) {
   
   int arg_count = 0;
   char *arg_list[2*compilation_unit];
-  isl_ctx *ctx;
-	struct pet_scop *scop;
-	struct options *options;
-  isl_schedule *schedule;
   char *incl = "-I";
 
   // arg_list[arg_count] = argv[0];
@@ -166,6 +162,8 @@ int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit) {
   if (fp == NULL) {
       printf("Failed to run command\n");
       ret = NULL;
+  } else {
+    strncpy(ret, sched, strlen(sched));
   }
   pclose(fp);
 
@@ -182,7 +180,8 @@ int main(int argc, char *argv[]) {
   // initialize 10 ptr to store ppcg call path
   prog_path = argv[1];
   ppcg_launch = argv[2];
-  char *ret;
+  // Same size as sched
+  char *ret = malloc(BUFFER_SIZE*sizeof(char) / 4);
   char **unit = malloc(10 * sizeof(char *));
   int compilation_unit = parse_dwarf(unit);
   #ifdef DEBUG
@@ -203,20 +202,29 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // // print the arg_list
-  // #ifdef DEBUG
-  // for (int i = 0; i < arg_count; i++) {
-  //   printf("%s\n", arg_list[i]);
-  // }
-  // #endif
+  #ifdef DEBUG
+  printf("The schedule is at %s\n", ret);
+  #endif
 
-	// options = options_new_with_defaults();
-	// ctx = isl_ctx_alloc_with_options(&options_args, options);
+  isl_ctx *ctx;
+	struct pet_scop *scop;
+	struct options *options;
+  isl_schedule *schedule;
+	options = options_new_with_defaults();
+	ctx = isl_ctx_alloc_with_options(&options_args, options);
 	// arg_count = options_parse(options, arg_count, arg_list, ISL_ARG_ALL);
 
 	// scop = pet_scop_extract_from_C_source(ctx, options->input, NULL);
   // schedule = pet_scop_get_schedule(scop);
-  // isl_schedule_dump(schedule);
+
+  FILE *file;
+	file = fopen(ret, "r");
+	if (!file) {
+		fprintf(stderr, "Unable to open '%s' for reading\n", ret);
+		return 1;
+	}
+	schedule = isl_schedule_read_from_file(ctx, file);
+  isl_schedule_dump(schedule);
 
   // Create pipe descriptors
   int pipe_fd[2];
@@ -256,8 +264,8 @@ int main(int argc, char *argv[]) {
     // What if then we have to run the batch of benchmarks?
     execl("/home/dreyex/Documents/Research/PPT/./vg-in-place", "vg-in-place",
           "--tool=cachegrind", "--instr-at-start=no", "--cache-sim=yes",
-          "--D1=49152,12,64", "--I1=32768,8,64", "--L2=1310720,10,64", "-v",
-          "-d", "--log-fd=1", "/home/dreyex/use_this/jacobi-2d", NULL);
+          "--D1=49152,12,64", "--I1=32768,8,64", "--L2=1310720,10,64", "-v", 
+          "--log-fd=1", "/home/dreyex/use_this/jacobi-2d", NULL);
     perror("execl");
     exit(EXIT_FAILURE);
   } else { // Parent process (Program B)
@@ -335,5 +343,9 @@ int main(int argc, char *argv[]) {
     free(unit[i]);
   }
   free(unit);
+	fclose(file);
+  isl_schedule_free(schedule);
+  isl_ctx_free(ctx);
+  free(ret);
   return 0;
 }
