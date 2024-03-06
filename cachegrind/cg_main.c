@@ -48,12 +48,6 @@
 #include "cg_branchpred.c"
 #include "cg_sim.c"
 
-#include <isl/options.h>
-#include <isl/printer.h>
-#include <isl/schedule.h>
-#include <stdio.h>
-#include <stdlib.h>
-
 /*------------------------------------------------------------*/
 /*--- Constants                                            ---*/
 /*------------------------------------------------------------*/
@@ -74,32 +68,6 @@ static const HChar *clo_cachegrind_out_file = "cachegrind.out.%p";
 /*------------------------------------------------------------*/
 /*--- From PET and ISL                                     ---*/
 /*------------------------------------------------------------*/
-
-static HChar *file_name_scop = NULL;
-static isl_ctx *ctx;
-static isl_printer *p;
-static isl_schedule_constraints *sc;
-static isl_schedule *schedule;
-static struct isl_options *options;
-
-extern struct isl_options *isl_options_new_with_defaults(void);
-extern int isl_options_parse(struct isl_options *opt, int argc, char **argv,
-                             unsigned int flags);
-extern isl_ctx *isl_ctx_alloc_with_options(struct isl_args *args, void *opt);
-
-extern isl_schedule_constraints *
-isl_schedule_constraints_read_from_file(isl_ctx *ctx, FILE *input);
-extern isl_schedule *
-isl_schedule_constraints_compute_schedule(isl_schedule_constraints *sc);
-
-extern isl_printer *isl_printer_to_file(isl_ctx *ctx, FILE *file);
-extern isl_printer *isl_printer_set_yaml_style(isl_printer *p, int yaml_style);
-extern isl_printer *isl_printer_print_schedule(isl_printer *p,
-                                               isl_schedule *schedule);
-extern isl_printer *isl_printer_free(isl_printer *printer);
-
-extern isl_schedule *isl_schedule_free(isl_schedule *sched);
-extern void isl_ctx_free(isl_ctx *ctx);
 
 /*------------------------------------------------------------*/
 /*--- Cachesim configuration                               ---*/
@@ -1074,36 +1042,6 @@ static IRSB *cg_instrument(VgCallbackClosure *closure, IRSB *sbIn,
     VG_(printf)("\n\n---------- cg_instrument ----------\n");
 
   // Initialise pet pragma scop for the file
-  LineCC *parent = get_lineCC(cia);
-  if (file_name_scop == NULL) {
-    // file_name_scop = parent->loc.file;
-    // /* This part with bug, cannot compile! */
-    // char **arg_value;
-    // // Temporarily allocate memory for cchegrind
-    // arg_value[0] = (char
-    // *)VG_(malloc)("/home/dreyex/Documents/Research/PPT/.in_place/cachegrind-amd64-linux",
-    // 70); arg_value[1] = (char *)file_name_scop; int arg_counts = 2;
-
-    // // Set the pet pragma scop for the file
-    // options = isl_options_new_with_defaults();
-    // arg_counts = isl_options_parse(options, arg_counts, arg_value,
-    // ISL_ARG_ALL); ctx = isl_ctx_alloc_with_options(&isl_options_args,
-    // options);
-
-    // sc = isl_schedule_constraints_read_from_file(ctx, stdin);
-    // schedule = isl_schedule_constraints_compute_schedule(sc);
-
-    // p = isl_printer_to_file(ctx, stdout);
-    // p = isl_printer_set_yaml_style(p, ISL_YAML_STYLE_BLOCK);
-    // p = isl_printer_print_schedule(p, schedule);
-    // isl_printer_free(p);
-
-    // isl_printer_free(p);
-
-    // isl_schedule_free(schedule);
-
-    // isl_ctx_free(ctx);
-  }
 
   // Traverse the block, initialising inodes, adding events and flushing as
   // necessary.

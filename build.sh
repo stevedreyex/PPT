@@ -30,17 +30,14 @@ else
   git submodule update --init --recursive
 fi
 
-if test -f isl/autogen.sh; then
-	(cd isl; ./autogen.sh)
-fi
-if test -f pet/autogen.sh; then
-	(cd pet; ./autogen.sh)
+if test -f ppcg/autogen.sh; then
+	(cd ppcg; ./autogen.sh)
 fi
 
 ./autogen.sh
-cd ./isl && bash ../build_submodule.sh && cd ..
-cd ./pet && bash ../build_submodule.sh && cd ..
+cd ./ppcg/isl && bash ../../build_submodule.sh && cd ../..
+cd ./ppcg && bash autogen.sh && ./configure && make -j$(nproc) && cd ..
 mkdir install
-./configure CFLAGS="-I `pwd`/isl/include -I `pwd`/pet/include" LDFLAGS="-L `pwd`/pet/install/lib -lpet -L `pwd`/isl/install/lib -lisl -v -g" --prefix=`pwd`/install --enable-inner
+./configure --prefix=`pwd`/install --enable-inner
 make -j$(nproc)
 make install
