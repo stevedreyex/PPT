@@ -4,9 +4,16 @@ Release notes for Valgrind
 ========================================================
 
 To build the project, you need to have the following instructions:
-
+```
 $ bash build.sh
+```
 
+To Save the affine mem addr represent with polyhedral model,
+compile the core program after valgrind is build
+```
+$ gcc CorePPT.c -DDEBUG -Ippcg/isl/include -I/ppcg -Ippcg/pet/include -Ippcg/pet -L ./ppcg/isl/install/lib -lisl -L ./ppcg/pet/.libs -lpet -g -o CorePPT
+$ ./CorePPT /your/prog /ppcg/path # You can use pipe to save it into a file
+```
 
 ========================================================
 

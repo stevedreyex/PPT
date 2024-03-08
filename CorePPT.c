@@ -9,9 +9,9 @@
 #include <isl/options.h>
 #include <isl/schedule_node.h>
 
-#include "pet/options.h"
-#include "pet/scop.h"
-#include "pet/scop_yaml.h"
+#include "ppcg/pet/options.h"
+#include "ppcg/pet/scop.h"
+#include "ppcg/pet/scop_yaml.h"
 
 struct options {
 	struct isl_options	*isl;
@@ -224,7 +224,7 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 	schedule = isl_schedule_read_from_file(ctx, file);
-  isl_schedule_dump(schedule);
+  // isl_schedule_dump(schedule);
 
   // Create pipe descriptors
   int pipe_fd[2];

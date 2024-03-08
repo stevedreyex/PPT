@@ -55,6 +55,7 @@
 /* Set to 1 for very verbose debugging */
 #define DEBUG_CG 0
 #define OFFLINE_SIM 1
+#define SIM_ANS 0
 
 /*------------------------------------------------------------*/
 /*--- Options                                              ---*/
@@ -379,11 +380,16 @@ static VG_REGPARM(3) void log_1IrNoX_1Dr_cache_access(InstrInfo *n,
   cachesim_I1_doref_NoX(n->instr_addr, n->instr_len, &n->parent->Ir.m1,
                         &n->parent->Ir.mL);
   n->parent->Ir.a++;
-
+  ULong prev = (n->parent->Dr.m1);
   cachesim_D1_doref(data_addr, data_size, &n->parent->Dr.m1, &n->parent->Dr.mL);
   n->parent->Dr.a++;
 #if OFFLINE_SIM
   VG_(message)(Vg_ClientMsg, "& R %d 0x%010lx %ld\n", n->parent->loc.line, data_addr, data_size);
+  #if SIM_ANS
+  if (prev != (n->parent->Dr.m1)){
+    VG_(message)(Vg_ClientMsg, "Read MISS! in %llu\n", prev);
+  }
+  #endif
 #endif
 }
 
@@ -396,11 +402,16 @@ static VG_REGPARM(3) void log_1IrNoX_1Dw_cache_access(InstrInfo *n,
   cachesim_I1_doref_NoX(n->instr_addr, n->instr_len, &n->parent->Ir.m1,
                         &n->parent->Ir.mL);
   n->parent->Ir.a++;
-
+  ULong prev = (n->parent->Dw.m1);
   cachesim_D1_doref(data_addr, data_size, &n->parent->Dw.m1, &n->parent->Dw.mL);
   n->parent->Dw.a++;
 #if OFFLINE_SIM
   VG_(message)(Vg_ClientMsg, "& W %d 0x%010lx %ld\n", n->parent->loc.line, data_addr, data_size);
+  #if SIM_ANS
+  if (prev != (n->parent->Dw.m1)){
+    VG_(message)(Vg_ClientMsg, "Write MISS! in %llu\n", prev);
+  }
+  # endif
 #endif
 }
 
@@ -411,10 +422,16 @@ static VG_REGPARM(3) void log_0Ir_1Dr_cache_access(InstrInfo *n, Addr data_addr,
                                                    Word data_size) {
   // VG_(printf)("0Ir_1Dr:  CCaddr=0x%010lx,  daddr=0x%010lx,  dsize=%lu\n",
   //            n, data_addr, data_size);
+  ULong prev = (n->parent->Dr.m1);
   cachesim_D1_doref(data_addr, data_size, &n->parent->Dr.m1, &n->parent->Dr.mL);
   n->parent->Dr.a++;
 #if OFFLINE_SIM
   VG_(message)(Vg_ClientMsg, "& R %d 0x%010lx %ld\n", n->parent->loc.line, data_addr, data_size);
+  #if SIM_ANS
+  if (prev != (n->parent->Dr.m1)){
+    VG_(message)(Vg_ClientMsg, "x Read MISS! in %llu\n", prev);
+  }
+  #endif
 #endif
 }
 
@@ -423,10 +440,16 @@ static VG_REGPARM(3) void log_0Ir_1Dw_cache_access(InstrInfo *n, Addr data_addr,
                                                    Word data_size) {
   // VG_(printf)("0Ir_1Dw:  CCaddr=0x%010lx,  daddr=0x%010lx,  dsize=%lu\n",
   //            n, data_addr, data_size);
+  ULong prev = (n->parent->Dw.m1);
   cachesim_D1_doref(data_addr, data_size, &n->parent->Dw.m1, &n->parent->Dw.mL);
   n->parent->Dw.a++;
 #if OFFLINE_SIM
   VG_(message)(Vg_ClientMsg, "& W %d 0x%010lx %ld\n", n->parent->loc.line, data_addr, data_size);
+  #if SIM_ANS
+  if (prev != (n->parent->Dw.m1)){
+    VG_(message)(Vg_ClientMsg, "x Write MISS! in %llu\n", prev);
+  }
+  #endif
 #endif
 }
 
