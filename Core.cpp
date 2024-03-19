@@ -33,11 +33,18 @@ typedef struct {
   int is_gt;
   char *ub;
   char *lb;
+  int ub_val;
+  int lb_val;
 } indexBound;
 
 typedef struct  {
-  int num_stmt;
+  /* Number of undetermined vars */
+  int n_num;
+  /* Number of indexBound, also the number of stmts (in dom) */
+  int ib_num;
+  /* the [x, x, x, ...] -> { ... }, the x part, vars for inequality */
   char **variables;
+  /* the [x, x, x, ...] -> { ... }, the ... part, the comstraint of each stmt */
   indexBound** bounds;
 } stmtDomain;
 
@@ -48,9 +55,8 @@ typedef struct  {
  * @param out char **unit: the array of compiled source path
  * @return int: number of compilation unit
  */
-int parse_dwarf(char **unit){
+int parse_dwarf(char **unit, FILE *fp) {
 
-  FILE *fp;
   int compilation_unit = 0;
   char path[1035];
   char prev_line[1035] = "";
@@ -58,15 +64,6 @@ int parse_dwarf(char **unit){
   //init the array, assume there's only 10 compilation unit
   for (int i = 0; i < 10; i++) {
     unit[i] = NULL;
-}
-
-  // Open the command for reading
-  char cmd[BUFFER_SIZE];
-  snprintf(cmd,BUFFER_SIZE-1, "readelf --debug-dump=info %s", prog_path);
-  fp = popen(cmd, "r");
-  if (fp == NULL) {
-      printf("Failed to run command\n");
-      exit(1);
   }
 
   // Read the output line by line and process it
@@ -174,7 +171,7 @@ int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit) {
       printf("Failed to run command\n");
       ret = NULL;
   } else {
-    strncpy(ret, sched, strlen(sched));
+    strcpy(ret, sched);
   }
   pclose(fp);
 
@@ -231,7 +228,7 @@ inline void parse_inequality(const std::string &s, stmtDomain dom){
   size_t pos = 0;
   int index_var;
   // Find which index this inequality is for
-  for (int i = 0; i < dom.num_stmt; i++) {
+  for (int i = 0; i < dom.n_num; i++) {
     if (s.find(dom.variables[i]) != std::string::npos) {
       // This is the index
       index_var = i;
@@ -245,14 +242,12 @@ inline void parse_inequality(const std::string &s, stmtDomain dom){
           pos += tok.length();
   }
 
-  std::cout << "occurrences: " << occurrences << std::endl;
 
   if (occurrences == 2) {
     // Find contents from initial to the first "<"
     size_t pos = s.find("<");
     // Start from 1, bypass the space
     std::string elem = s.substr(1, pos-1);
-    std::cout << "elem: " << elem << std::endl;
     dom.bounds[index_var]->lb = (char *)(malloc(elem.length() + 1));
     strcpy(dom.bounds[index_var]->lb, elem.c_str());
     // If the next char is "=", then it's less than or equal
@@ -303,16 +298,17 @@ int extract_dom_from_sched(FILE *file, stmtDomain *dom) {
     strcpy(dom->variables[stmt], it->c_str());
     stmt++;
   }
-  dom->num_stmt = stmt;
+  dom->n_num = stmt;
   // Then parse the domain part
   tokens = split(line, ';', "{", "}");
+  int num_iter = 0;
 
   // std::cout << "domain: " << token << std::endl;
   // list dump
   for (std::list<std::string>::iterator it = tokens.begin(); it != tokens.end(); it++) {
     sscanf(it->c_str(), "S%d%*s", &stmt);
+    std::cout << "S" << stmt << std::endl;
     std::list<std::string> iters = split(*it, ',', "[", "]");
-    int num_iter = 0;
     for (auto nn : iters) {
       indexBound *bound = (indexBound *)(malloc(sizeof(indexBound)));
       bound->index = (char *)(malloc(nn.length() + 1));
@@ -325,6 +321,73 @@ int extract_dom_from_sched(FILE *file, stmtDomain *dom) {
     for (auto nn : iters) {
       parse_inequality(nn, *dom);
     }
+    dom->ib_num++;
+  }
+  status = 1;
+  dom->bounds[num_iter + 1] = NULL;
+  return status;
+}
+
+int parse_dwarf_calc_bound(char **unit, FILE *fp, stmtDomain *dom, 
+                           std::vector<std::pair<const char *, int>> &var_n_val) {
+  int status = 0;
+  int skip = 1;
+  int found = 0;
+  char buffer[BUFFER_SIZE];
+  char target[32];
+  const char *long_mode = "    <%*x>   DW_AT_name        : (indirect string, offset: 0x%*x): %s";  
+  const char *short_mode = "    <%*x>   DW_AT_name        : %s";
+  // The rule of dwarf:
+  // One element starts with line which the buf[1] is "<"
+  // Then the following line is the attribute, which DW_AT_name is the first attribute of the elem
+  // If the DW_AT_name matches the variable name, we want to find the DW_AT_const_value 5 lines after
+  while (fgets(buffer, sizeof(buffer), fp) != NULL){
+    if (buffer[1] == '<') {
+      // New element, can do more detail check
+      if (strstr(buffer, "DW_TAG_variable") == NULL){
+        skip = 1;
+        continue;
+      }
+      skip = 0;
+      continue;
+    }
+    if (skip) continue;
+    // Check if the current line contains DW_AT_name
+    if (strstr(buffer, "DW_AT_name") == NULL){
+      skip = 1;
+      continue;
+    } else {
+      // Check if the DW_AT_name matches the variable name
+      if (strlen(buffer) > 50){
+        // use long parse string mode
+        sscanf(buffer, long_mode, target);
+      } else {
+        // use short parse string mode
+        sscanf(buffer, short_mode, target);
+      }
+      // Check if the DW_AT_name matches any variable name
+      for (int i = 0; i < dom->n_num; i++){
+        if (!strcmp(dom->variables[i], target)){
+          found = 1;
+          std::cout << "found: " << target << std::endl;
+          for (int j = 0; j < 5; j++){
+            fgets(buffer, sizeof(buffer), fp);
+          }
+          if (strstr(buffer, "DW_AT_const_value") != NULL){
+            int val;
+            sscanf(buffer, "    <%*x>   DW_AT_const_value : %d", &val);
+            var_n_val.push_back(std::make_pair(target, val));
+            break;
+          }
+          break;
+        }
+      }if (!found){
+        skip = 1;
+        continue;
+      }
+      // Else, a matched on is found, create an table elem to subsitute content
+    }
+    std::cout << buffer;
   }
   status = 1;
   return status;
@@ -339,10 +402,20 @@ int main(int argc, char *argv[]) {
   // initialize 10 ptr to store ppcg call path
   prog_path = argv[1];
   ppcg_launch = argv[2];
+
+  FILE *fp;
+  char cmd[BUFFER_SIZE];
+  snprintf(cmd,BUFFER_SIZE-1, "readelf --debug-dump=info %s", prog_path);
+  fp = popen(cmd, "r");
+  if (fp == NULL) {
+      printf("Failed to run command\n");
+      exit(1);
+  }
+
   // Same size as sched
   char *ret = (char *)(malloc(BUFFER_SIZE*sizeof(char) / 4));
   char **unit = (char **)(malloc(10 * sizeof(char *)));
-  int compilation_unit = parse_dwarf(unit);
+  int compilation_unit = parse_dwarf(unit, fp);
   #ifdef DEBUG
   if (compilation_unit == 0) {
       printf("No DW_AT_name and DW_AT_comp_dir found\n");
@@ -381,17 +454,23 @@ int main(int argc, char *argv[]) {
 
   int status = 0;
   stmtDomain *dom = (stmtDomain *)(malloc(sizeof(stmtDomain)));
-  dom->num_stmt = 0;
+  dom->n_num = 0;
+  dom->ib_num = 0;
   dom->bounds = (indexBound **)(malloc(10 * sizeof(indexBound *)));
   dom->variables = (char **)(malloc(10 * sizeof(char *)));
   status = extract_dom_from_sched(file, dom);
+  
+  // Reparse the dwarf to get the loop bound actual val
+  // TODO
+  // The fp is still open, we can reuse it, but move fd head to the beginning
+  fp = popen(cmd, "r");
+  std::vector<std::pair<const char *, int>> var_n_val;
+  status = parse_dwarf_calc_bound(unit, fp, dom, var_n_val);
   if (status == 1)
   {
-    /* code */
     printf("Error: Unable to extract domain from the schedule\n");
     return 1;
   }
-  
 
 	schedule = isl_schedule_read_from_file(ctx, file);
   #ifdef DEBUG
