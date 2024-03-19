@@ -38,17 +38,59 @@ typedef struct {
 } indexBound;
 
 typedef struct  {
-  /* Number of undetermined vars */
-  int n_num;
+  /* Which statement? */
+  int stmt_no;
+  /* the {Sn[x, x, x, ...] : constraints ; ... }, the x part, vars for inequality */
+  char **names;
   /* Number of indexBound, also the number of stmts (in dom) */
   int ib_num;
+  /* the constraint part, the constraint for each stmt */
+  indexBound** ib;
+} stmtSpace;
+
+typedef struct {
+  /* The number of the statement */
+  int stmt_num;
+  /* Number of undetermined vars */
+  int var_num;
+  /* The address of the statement */
+  stmtSpace **stmt;
   /* the [x, x, x, ...] -> { ... }, the x part, vars for inequality */
   char **variables;
-  /* the [x, x, x, ...] -> { ... }, the ... part, the comstraint of each stmt */
-  indexBound** bounds;
-} stmtDomain;
+} domainSpace;
 
 #define BUFFER_SIZE 1024 // Increased buffer size
+
+/* The initializer starts */
+indexBound *init_indexBound() {
+  indexBound *bound = (indexBound *)(malloc(sizeof(indexBound)));
+  bound->index = NULL;
+  bound->is_lt = 0;
+  bound->is_gt = 0;
+  bound->ub = NULL;
+  bound->lb = NULL;
+  bound->ub_val = 0;
+  bound->lb_val = 0;
+  return bound;
+}
+
+stmtSpace *init_stmtSpace(int stmt_no, int ib_num) {
+  stmtSpace *stmt = (stmtSpace *)(malloc(sizeof(stmtSpace)));
+  stmt->stmt_no = stmt_no;
+  stmt->ib_num = ib_num;
+  stmt->names = (char **)(malloc(10 * sizeof(char *)));
+  stmt->ib = (indexBound **)(malloc(10 * sizeof(indexBound *)));
+  return stmt;
+}
+
+domainSpace *init_domainSpace() {
+  domainSpace *dom = (domainSpace *)(malloc(sizeof(domainSpace)));
+  dom->stmt_num = 0;
+  dom->var_num = 0;
+  dom->stmt = (stmtSpace **)(malloc(10 * sizeof(stmtSpace *)));
+  dom->variables = (char **)(malloc(10 * sizeof(char *)));
+  return dom;
+}
 
 /*
  * Parse the DWARF information from the binary
@@ -222,19 +264,25 @@ std::list<std::string> split_by_str(const std::string &s, const std::string deli
   return tokens;
 }
 
-inline void parse_inequality(const std::string &s, stmtDomain dom){
+inline void parse_inequality(const std::string &s, stmtSpace *stmt){
+  std::cout << "parsing: " << s << std::endl; 
   std::string tok = "<";
   int occurrences = 0;
   size_t pos = 0;
-  int index_var;
+  int index_var = -1;
   // Find which index this inequality is for
-  for (int i = 0; i < dom.n_num; i++) {
-    if (s.find(dom.variables[i]) != std::string::npos) {
+  for (int i = 0; i < stmt->ib_num; i++) {
+    if (s.find(stmt->names[i]) != std::string::npos) {
       // This is the index
       index_var = i;
       break;
     }
   }
+  if (index_var == -1) {
+    std::cout << "Error: index_var not found" << std::endl;
+    return;
+  }
+  std::cout << "index_var: " << index_var << std::endl;
 
   // Find which inequality it is (2 or 3 elements?)
   while ((pos = s.find(tok, pos )) != std::string::npos) {
@@ -248,28 +296,27 @@ inline void parse_inequality(const std::string &s, stmtDomain dom){
     size_t pos = s.find("<");
     // Start from 1, bypass the space
     std::string elem = s.substr(1, pos-1);
-    dom.bounds[index_var]->lb = (char *)(malloc(elem.length() + 1));
-    strcpy(dom.bounds[index_var]->lb, elem.c_str());
+    stmt->ib[index_var]->lb = (char *)(malloc(elem.length() + 1));
+    strcpy(stmt->ib[index_var]->lb, elem.c_str());
     // If the next char is "=", then it's less than or equal
     if (s[pos + 1] == '=') 
-      dom.bounds[index_var]->is_lt = 0;
+      stmt->ib[index_var]->is_lt = 0;
     else
-      dom.bounds[index_var]->is_lt = 1;
+      stmt->ib[index_var]->is_lt = 1;
     // Find contents from the second "<" to the end 
     pos = s.find("<", pos + 1);
     if (s[pos + 1] == '=') {
-      dom.bounds[index_var]->is_gt = 0;
+      stmt->ib[index_var]->is_gt = 0;
       // Bypass the "="
       pos++;
     }
     else
-      dom.bounds[index_var]->is_gt = 1;
+      stmt->ib[index_var]->is_gt = 1;
     // Bypass the " "
     pos++;
     elem = s.substr(pos + 1, s.length() - pos - 1);
-    dom.bounds[index_var]->ub = (char *)(malloc(elem.length() + 1));
-    std::cout << "elem: " << elem << std::endl;
-    strcpy(dom.bounds[index_var]->ub, elem.c_str());
+    stmt->ib[index_var]->ub = (char *)(malloc(elem.length() + 1));
+    strcpy(stmt->ib[index_var]->ub, elem.c_str());
     // If the next char is "=", then it's less than or equal
   } 
   // else (occurrence = 1 Unimplemented)
@@ -278,11 +325,11 @@ inline void parse_inequality(const std::string &s, stmtDomain dom){
 /*
  * Extract the domain each statement from the schedule
  * @param in FILE *file: the file to extract the domain from
- * @param out stmtDomain *dom: the domain of each statement
+ * @param out stmtSpace *dom: the domain of each statement
  */
-int extract_dom_from_sched(FILE *file, stmtDomain *dom) {
+int extract_dom_from_sched(FILE *file, domainSpace *dom) {
   char line[BUFFER_SIZE];
-  int stmt = 0;
+  int var_num = 0;
   int status = 0;
   // We only get the first line of the file and parse it
   fgets(line, sizeof(line), file);
@@ -294,47 +341,59 @@ int extract_dom_from_sched(FILE *file, stmtDomain *dom) {
   std::list<std::string> tokens = split(line, ',', "[", "]");
   for (std::list<std::string>::iterator it = tokens.begin(); it != tokens.end(); it++) {
     // copy to dom variable
-    dom->variables[stmt] = (char *)(malloc(it->length() + 1));
-    strcpy(dom->variables[stmt], it->c_str());
-    stmt++;
+    dom->variables[var_num] = (char *)(malloc(it->length() + 1));
+    strcpy(dom->variables[var_num], it->c_str());
+    var_num++;
   }
-  dom->n_num = stmt;
+  dom->var_num = var_num;
   // Then parse the domain part
   tokens = split(line, ';', "{", "}");
-  int num_iter = 0;
+  int curr_stmt = 0;
 
   // std::cout << "domain: " << token << std::endl;
   // list dump
   for (std::list<std::string>::iterator it = tokens.begin(); it != tokens.end(); it++) {
-    sscanf(it->c_str(), "S%d%*s", &stmt);
-    std::cout << "S" << stmt << std::endl;
+    int num_iter = 0;
+    sscanf(it->c_str(), "S%d%*s", &curr_stmt);
+    // std::cout << "S" << curr_stmt << std::endl;
     std::list<std::string> iters = split(*it, ',', "[", "]");
+    std::list<std::string> constraints = split_by_str(*it, "and", ":", ";");
+    stmtSpace *stmt = init_stmtSpace(curr_stmt, iters.size());
+    std::cout << "curr_stmt: " << curr_stmt << ", iters.size(): " << iters.size() << ", constraints.size(): " << constraints.size() << std::endl;
     for (auto nn : iters) {
-      indexBound *bound = (indexBound *)(malloc(sizeof(indexBound)));
+      indexBound *bound = init_indexBound();
       bound->index = (char *)(malloc(nn.length() + 1));
-      dom->bounds[num_iter] = bound;
       strcpy(bound->index, nn.c_str());
+      stmt->ib[num_iter] = bound;
+      stmt->names[num_iter] = bound->index;
       num_iter++;
     }
-    iters.clear();
-    iters = split_by_str(*it, "and", ":", ";");
-    for (auto nn : iters) {
-      parse_inequality(nn, *dom);
+    stmt->ib_num = num_iter;
+    // Dump and check stmt_names
+    for (int i = 0; i < stmt->ib_num; i++) {
+      std::cout << "stmt_names: " << stmt->names[i] << std::endl;
     }
-    dom->ib_num++;
+    // Parse the inequality (constraint part)
+    for (auto c : constraints) {
+      parse_inequality(c, stmt);
+    }
+    dom->stmt[dom->stmt_num] = stmt;
+    dom->stmt_num++;
   }
   status = 1;
-  dom->bounds[num_iter + 1] = NULL;
+  // Could iterate through the list till the end
+  dom->stmt[dom->stmt_num + 1] = NULL;
   return status;
 }
 
-int parse_dwarf_calc_bound(char **unit, FILE *fp, stmtDomain *dom, 
+int parse_dwarf_calc_bound(char **unit, FILE *fp, domainSpace *dom, 
                            std::vector<std::pair<const char *, int>> &var_n_val) {
   int status = 0;
   int skip = 1;
   int found = 0;
   char buffer[BUFFER_SIZE];
   char target[32];
+  char *to_write;
   const char *long_mode = "    <%*x>   DW_AT_name        : (indirect string, offset: 0x%*x): %s";  
   const char *short_mode = "    <%*x>   DW_AT_name        : %s";
   // The rule of dwarf:
@@ -366,17 +425,19 @@ int parse_dwarf_calc_bound(char **unit, FILE *fp, stmtDomain *dom,
         sscanf(buffer, short_mode, target);
       }
       // Check if the DW_AT_name matches any variable name
-      for (int i = 0; i < dom->n_num; i++){
+      for (int i = 0; i < dom->var_num; i++){
         if (!strcmp(dom->variables[i], target)){
           found = 1;
           std::cout << "found: " << target << std::endl;
+          to_write = (char *)(malloc(strlen(target) + 1));
+          strcpy(to_write, target);
           for (int j = 0; j < 5; j++){
             fgets(buffer, sizeof(buffer), fp);
           }
           if (strstr(buffer, "DW_AT_const_value") != NULL){
             int val;
             sscanf(buffer, "    <%*x>   DW_AT_const_value : %d", &val);
-            var_n_val.push_back(std::make_pair(target, val));
+            var_n_val.push_back(std::make_pair(to_write, val));
             break;
           }
           break;
@@ -387,10 +448,30 @@ int parse_dwarf_calc_bound(char **unit, FILE *fp, stmtDomain *dom,
       }
       // Else, a matched on is found, create an table elem to subsitute content
     }
-    std::cout << buffer;
   }
   status = 1;
   return status;
+}
+
+int calc_dom_bound(domainSpace *dom, std::vector<std::pair<const char *, int>> var_n_val) {
+  // First dump all ib in dom
+  for (int i = 0; i < dom->stmt_num; i++) {
+    stmtSpace *stmt = dom->stmt[i];
+    std::cout << "S" << stmt->stmt_no << std::endl;
+    for (int j = 0; j < stmt->ib_num; j++) {
+      indexBound *ib = stmt->ib[j];
+      std::cout << ib->lb ;
+      //std::cout << "is_lt: " << dom->ib[i]->is_lt << std::endl;
+      if (ib->is_lt) std::cout << " < ";
+      else std::cout << " <= " ;
+      std::cout << ib->index ;
+      // std::cout << "is_gt: " << dom->ib[i]->is_gt << std::endl;
+      if (ib->is_gt) std::cout << " < ";
+      else std::cout << " <= " ;
+      std::cout << ib->ub << std::endl;
+    }
+  }
+  return 1;
 }
 
 /*
@@ -453,11 +534,9 @@ int main(int argc, char *argv[]) {
 	}
 
   int status = 0;
-  stmtDomain *dom = (stmtDomain *)(malloc(sizeof(stmtDomain)));
-  dom->n_num = 0;
-  dom->ib_num = 0;
-  dom->bounds = (indexBound **)(malloc(10 * sizeof(indexBound *)));
-  dom->variables = (char **)(malloc(10 * sizeof(char *)));
+
+  /* Part start to parse the domain from schedule tree domain */
+  domainSpace *dom = init_domainSpace();
   status = extract_dom_from_sched(file, dom);
   
   // Reparse the dwarf to get the loop bound actual val
@@ -466,6 +545,7 @@ int main(int argc, char *argv[]) {
   fp = popen(cmd, "r");
   std::vector<std::pair<const char *, int>> var_n_val;
   status = parse_dwarf_calc_bound(unit, fp, dom, var_n_val);
+  status = calc_dom_bound(dom, var_n_val);
   if (status == 1)
   {
     printf("Error: Unable to extract domain from the schedule\n");
@@ -496,8 +576,6 @@ int main(int argc, char *argv[]) {
   int stmt = 1;
   // Read from the file after ##### ooccurs
   
-
-
   // Create pipe descriptors
   int pipe_fd[2];
   if (pipe(pipe_fd) == -1) {
