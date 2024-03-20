@@ -69,8 +69,8 @@ indexBound *init_indexBound() {
   bound->is_gt = 0;
   bound->ub = NULL;
   bound->lb = NULL;
-  bound->ub_val = 0;
-  bound->lb_val = 0;
+  bound->ub_val = -1;
+  bound->lb_val = -1;
   return bound;
 }
 
@@ -266,7 +266,7 @@ std::list<std::string> split_by_str(const std::string &s, const std::string deli
 }
 
 inline void parse_inequality(const std::string &s, stmtSpace *stmt){
-  std::cout << "S" << stmt->stmt_no << " parsing: " << s << std::endl; 
+  // std::cout << "S" << stmt->stmt_no << " parsing: " << s  << "(whole token)" << std::endl; 
   std::string tok = "<";
   int occurrences = 0;
   size_t pos = 0;
@@ -292,14 +292,14 @@ inline void parse_inequality(const std::string &s, stmtSpace *stmt){
     std::cout << "Error: index_var not found" << std::endl;
     return;
   }
-  std::cout << "handle: " << stmt->names[index_var] << std::endl;
+  // std::cout << "handle: " << stmt->names[index_var] << std::endl;
 
   // Find which inequality it is (2 or 3 elements?)
   while ((pos = s.find(tok, pos )) != std::string::npos) {
           ++ occurrences;
           pos += tok.length();
   }
-  std::cout << "occurrences: " << occurrences << std::endl;
+  // std::cout << "occurrences: " << occurrences << std::endl;
 
   if (occurrences == 2) {
     // Find contents from initial to the first "<"
@@ -329,10 +329,49 @@ inline void parse_inequality(const std::string &s, stmtSpace *stmt){
     strcpy(stmt->ib[index_var]->ub, elem.c_str());
     // If the next char is "=", then it's less than or equal
   } 
-  // else {
-  //   // Occurrence == 1 or 0, since "<" not exists in ">" case
+  else {
+    // Occurrence == 1 or 0, since "<" not exists in ">" case
+    size_t pos = s.find("=");
+    int big = -1;
+    // The founded one is smaller
+    s.find(">") > s.find("<") ? big = 0 : big = 1;
+    // std::cout << "big: " << big << std::endl;
+    if (pos == std::string::npos) // Very sure is gt or lt
+      big ? stmt->ib[index_var]->is_lt = 1 : stmt->ib[index_var]->is_gt = 1;
+    else
+      big ? stmt->ib[index_var]->is_lt = 0 : stmt->ib[index_var]->is_gt = 0;
+    // std::cout << "is_lt: " << stmt->ib[index_var]->is_lt << std::endl;
+    // std::cout << "is_gt: " << stmt->ib[index_var]->is_gt << std::endl;
+    big ? pos = s.find(">") : pos = s.find("<");
+    // std::cout << "pos: " << pos << std::endl;
+    // get over the sign, take the val
+    std::string elem = s.substr(pos+2, s.size());
+    // std::cout << "elem: " << elem << std::endl;
+    big ? stmt->ib[index_var]->lb = (char *)(malloc(elem.length() + 1)) : 
+          stmt->ib[index_var]->ub = (char *)(malloc(elem.length() + 1));
+    big ? strcpy(stmt->ib[index_var]->lb, elem.c_str()) :
+          strcpy(stmt->ib[index_var]->ub, elem.c_str());
+  }
+}
 
-  // }
+inline void compensate(stmtSpace *stmt, int index, int is_ub){
+  if (is_ub) {
+    // Upper bound is null? Might be someone's lower bound
+    for (int i = 0; i < stmt->ib_num; i++) {
+      if (stmt->ib[i]->lb != NULL && !strcmp(stmt->ib[i]->lb, stmt->ib[index]->index)) {
+        stmt->ib[index]->ub = (char *)(malloc(strlen(stmt->ib[i]->ub) + 1));
+        strncpy(stmt->ib[index]->ub, stmt->ib[i]->ub, strlen(stmt->ib[i]->ub));
+      }
+    }
+  } else {
+    // Lower bound is null
+    for (int i = 0; i < stmt->ib_num; i++) {
+      if (stmt->ib[i]->ub != NULL && !strcmp(stmt->ib[i]->ub, stmt->ib[index]->index)) {
+        stmt->ib[index]->lb = (char *)(malloc(strlen(stmt->ib[i]->lb) + 1));
+        strncpy(stmt->ib[index]->lb, stmt->ib[i]->lb, strlen(stmt->ib[i]->lb));
+      }
+    }
+  }
 }
 
 /*
@@ -363,8 +402,7 @@ int extract_dom_from_sched(FILE *file, domainSpace *dom) {
   tokens = split(line, ';', "{", "}");
   int curr_stmt = 0;
 
-  // std::cout << "domain: " << token << std::endl;
-  // list dump
+  // For each stmt iterate:
   for (std::list<std::string>::iterator it = tokens.begin(); it != tokens.end(); it++) {
     int num_iter = 0;
     sscanf(it->c_str(), "S%d%*s", &curr_stmt);
@@ -384,6 +422,11 @@ int extract_dom_from_sched(FILE *file, domainSpace *dom) {
     // Parse the inequality (constraint part)
     for (auto c : constraints) {
       parse_inequality(c, stmt);
+    }
+    // Compensation for unfound upper/lower bound:
+    for (int i = 0; i < stmt->ib_num; i++) {
+      if (stmt->ib[i]->ub == NULL)  compensate(stmt, i, 1);
+      else if (stmt->ib[i]->lb == NULL) compensate(stmt, i, 0);
     }
     dom->stmt[dom->stmt_num] = stmt;
     dom->stmt_num++;
@@ -476,7 +519,7 @@ int calc_eq(const char *var, std::vector<std::pair<const char *, int>> var_n_val
   // WIP: This Line Is Not Safe!!!
   if (var == NULL) {
     std::cout << "Error: var is NULL" << std::endl;
-    return 0;
+    return -1;
   }
   std::string *parse_arget = new std::string(var);
   size_t pos = 0;
@@ -512,7 +555,7 @@ int calc_eq(const char *var, std::vector<std::pair<const char *, int>> var_n_val
     }
     temp_val = 0;
   }
-  std::cout << "val: " << val << std::endl;
+  // std::cout << "val: " << val << std::endl;
   return val;
 
 }
@@ -525,15 +568,17 @@ int calc_dom_bound(domainSpace *dom, std::vector<std::pair<const char *, int>> v
     std::cout << "S" << stmt->stmt_no << std::endl;
     for (int j = 0; j < stmt->ib_num; j++) {
       indexBound *ib = stmt->ib[j];
-      std::cout << ib->lb ;
+      if (ib->lb != NULL)
+      {std::cout << ib->lb ;
       //std::cout << "is_lt: " << dom->ib[i]->is_lt << std::endl;
       if (ib->is_lt) std::cout << " < ";
-      else std::cout << " <= " ;
+      else std::cout << " <= " ;}
       std::cout << ib->index ;
       // std::cout << "is_gt: " << dom->ib[i]->is_gt << std::endl;
-      if (ib->is_gt) std::cout << " < ";
+      if (ib->ub != NULL)
+      {if (ib->is_gt) std::cout << " < ";
       else std::cout << " <= " ;
-      std::cout << ib->ub << std::endl;
+      std::cout << ib->ub << std::endl;}
     }
   }
   #endif
@@ -628,6 +673,19 @@ int main(int argc, char *argv[]) {
     std::cout << p.first << " : " << p.second << "| ";
   } std::cout << std::endl;
   status = calc_dom_bound(dom, var_n_val);
+
+  #ifdef DEBUG
+  for (int i = 0; i < dom->stmt_num; i++) {
+    stmtSpace *stmt = dom->stmt[i];
+    std::cout << "S" << stmt->stmt_no << std::endl;
+    for (int j = 0; j < stmt->ib_num; j++) {
+      indexBound *ib = stmt->ib[j];
+      std::cout << "lb: " << ib->lb << " / " << ib->lb_val 
+                << " ub: " << ib->ub << " / " << ib->ub_val << std::endl;
+    }
+  }
+  #endif
+
   if (status == 1)
   {
     printf("Error: Unable to extract domain from the schedule\n");
