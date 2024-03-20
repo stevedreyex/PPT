@@ -355,11 +355,9 @@ int extract_dom_from_sched(FILE *file, domainSpace *dom) {
   for (std::list<std::string>::iterator it = tokens.begin(); it != tokens.end(); it++) {
     int num_iter = 0;
     sscanf(it->c_str(), "S%d%*s", &curr_stmt);
-    // std::cout << "S" << curr_stmt << std::endl;
     std::list<std::string> iters = split(*it, ',', "[", "]");
     std::list<std::string> constraints = split_by_str(*it, "and", ":", ";");
     stmtSpace *stmt = init_stmtSpace(curr_stmt, iters.size());
-    std::cout << "curr_stmt: " << curr_stmt << ", iters.size(): " << iters.size() << ", constraints.size(): " << constraints.size() << std::endl;
     for (auto nn : iters) {
       indexBound *bound = init_indexBound();
       bound->index = (char *)(malloc(nn.length() + 1));
@@ -369,10 +367,7 @@ int extract_dom_from_sched(FILE *file, domainSpace *dom) {
       num_iter++;
     }
     stmt->ib_num = num_iter;
-    // Dump and check stmt_names
-    for (int i = 0; i < stmt->ib_num; i++) {
-      std::cout << "stmt_names: " << stmt->names[i] << std::endl;
-    }
+
     // Parse the inequality (constraint part)
     for (auto c : constraints) {
       parse_inequality(c, stmt);
@@ -428,7 +423,6 @@ int parse_dwarf_calc_bound(char **unit, FILE *fp, domainSpace *dom,
       for (int i = 0; i < dom->var_num; i++){
         if (!strcmp(dom->variables[i], target)){
           found = 1;
-          std::cout << "found: " << target << std::endl;
           to_write = (char *)(malloc(strlen(target) + 1));
           strcpy(to_write, target);
           for (int j = 0; j < 5; j++){
@@ -453,8 +447,60 @@ int parse_dwarf_calc_bound(char **unit, FILE *fp, domainSpace *dom,
   return status;
 }
 
+/*
+ * Calculate the value of the variable
+ * @param in const char *var: the variable name
+ * @param in std::vector<std::pair<const char *, int>> var_n_val: the list of variable and its value
+ * @return int: the "actual calculated" value of the variable
+ */
+int calc_eq(const char *var, std::vector<std::pair<const char *, int>> var_n_val) {
+  // tokenize the var, make all elem to list, sepqrate by " "
+  int temp_val = 0;
+  int val = 0;
+  std::list<std::string> tokens;
+  std::string token;
+  std::string *parse_arget = new std::string(var);
+  size_t pos = 0;
+  while ((pos = parse_arget->find(" ")) != std::string::npos) {
+    token = parse_arget->substr(0, pos);
+    tokens.push_back(token);
+    parse_arget->erase(0, pos + 1);
+  }
+  tokens.push_back(*parse_arget);
+  //Dump the list
+  for (std::list<std::string>::iterator it = tokens.begin(); it != tokens.end(); it++) {
+    temp_val = atoi(it->c_str());
+    if (temp_val == 0) {
+      // Two cases: operator or number
+      // Operator
+      if (!strcmp(it->c_str(), "+") || !strcmp(it->c_str(), "-")
+          || !strcmp(it->c_str(), "*") || !strcmp(it->c_str(), "/")) {
+        continue;
+      } else {
+        // Might have subsitution
+        for (auto p : var_n_val) {
+          if (!strcmp(p.first, it->c_str())) {
+            std::cout << "substituting: " << it->c_str() << " to " << p.second << std::endl;
+            temp_val = p.second;
+            val += temp_val;
+            break;
+          }
+        }
+      }
+    } else {
+      std::cout << "is_a_val: " << temp_val << std::endl;
+      val += temp_val;
+    }
+    temp_val = 0;
+  }
+  std::cout << "val: " << val << std::endl;
+  return val;
+
+}
+
 int calc_dom_bound(domainSpace *dom, std::vector<std::pair<const char *, int>> var_n_val) {
   // First dump all ib in dom
+  #ifdef DEBUG
   for (int i = 0; i < dom->stmt_num; i++) {
     stmtSpace *stmt = dom->stmt[i];
     std::cout << "S" << stmt->stmt_no << std::endl;
@@ -471,6 +517,19 @@ int calc_dom_bound(domainSpace *dom, std::vector<std::pair<const char *, int>> v
       std::cout << ib->ub << std::endl;
     }
   }
+  #endif
+
+  for (int i = 0; i < dom->stmt_num; i++) {
+    stmtSpace *stmt = dom->stmt[i];
+    for (int j = 0; j < stmt->ib_num; j++) {
+      indexBound *ib = stmt->ib[j];
+      ib->ub_val = calc_eq(ib->ub, var_n_val);
+      if (ib->is_gt) ib->ub_val--;
+      ib->lb_val = calc_eq(ib->lb, var_n_val);
+      if (ib->is_lt) ib->lb_val++;
+    }
+  }
+
   return 1;
 }
 
