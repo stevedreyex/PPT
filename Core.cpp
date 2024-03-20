@@ -33,8 +33,8 @@ typedef struct {
   int is_gt;
   char *ub;
   char *lb;
-  int ub_val;
-  int lb_val;
+  long int ub_val;
+  long int lb_val;
 } indexBound;
 
 typedef struct  {
@@ -203,7 +203,8 @@ int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit) {
   strcat(sched, addition);
   // strcat(ppcg_call, "--save-schedule=/home/dreyex/use_this/schedule/jacobi-2d.sched");
   
-  snprintf(ppcg_call, BUFFER_SIZE-1, "%s %s --save-schedule=%s", ppcg_launch, ppcg_args, sched);
+  // A "--no-reschedule" flag is added to prevent ppcg from rescheduling the program
+  snprintf(ppcg_call, BUFFER_SIZE-1, "%s %s --no-reschedule --save-schedule=%s", ppcg_launch, ppcg_args, sched);
   #ifdef DEBUG
   printf("ppcg call: %s\n", ppcg_call);
   #endif
@@ -265,31 +266,40 @@ std::list<std::string> split_by_str(const std::string &s, const std::string deli
 }
 
 inline void parse_inequality(const std::string &s, stmtSpace *stmt){
-  std::cout << "parsing: " << s << std::endl; 
+  std::cout << "S" << stmt->stmt_no << " parsing: " << s << std::endl; 
   std::string tok = "<";
   int occurrences = 0;
   size_t pos = 0;
+  size_t temp = 0;
+  size_t index_pos = std::string::npos;
   int index_var = -1;
   // Find which index this inequality is for
+  /* Some Rules I've figured out later: 
+   * The index var comes first than the bound var in the inequality
+   * But constant bound is not limited to this rule
+   * So we need to find the index var that have the smaller index_pos
+   * Rather than the first one we've found
+   */
   for (int i = 0; i < stmt->ib_num; i++) {
-    if (s.find(stmt->names[i]) != std::string::npos) {
+    temp = s.find(stmt->names[i]);
+    if (temp < index_pos) {
       // This is the index
+      index_pos = temp;
       index_var = i;
-      break;
     }
   }
   if (index_var == -1) {
     std::cout << "Error: index_var not found" << std::endl;
     return;
   }
-  std::cout << "index_var: " << index_var << std::endl;
+  std::cout << "handle: " << stmt->names[index_var] << std::endl;
 
   // Find which inequality it is (2 or 3 elements?)
   while ((pos = s.find(tok, pos )) != std::string::npos) {
           ++ occurrences;
           pos += tok.length();
   }
-
+  std::cout << "occurrences: " << occurrences << std::endl;
 
   if (occurrences == 2) {
     // Find contents from initial to the first "<"
@@ -319,7 +329,10 @@ inline void parse_inequality(const std::string &s, stmtSpace *stmt){
     strcpy(stmt->ib[index_var]->ub, elem.c_str());
     // If the next char is "=", then it's less than or equal
   } 
-  // else (occurrence = 1 Unimplemented)
+  // else {
+  //   // Occurrence == 1 or 0, since "<" not exists in ">" case
+
+  // }
 }
 
 /*
@@ -455,10 +468,16 @@ int parse_dwarf_calc_bound(char **unit, FILE *fp, domainSpace *dom,
  */
 int calc_eq(const char *var, std::vector<std::pair<const char *, int>> var_n_val) {
   // tokenize the var, make all elem to list, sepqrate by " "
-  int temp_val = 0;
-  int val = 0;
+  long int temp_val = 0;
+  long int val = 0;
+  char *endptr;
   std::list<std::string> tokens;
   std::string token;
+  // WIP: This Line Is Not Safe!!!
+  if (var == NULL) {
+    std::cout << "Error: var is NULL" << std::endl;
+    return 0;
+  }
   std::string *parse_arget = new std::string(var);
   size_t pos = 0;
   while ((pos = parse_arget->find(" ")) != std::string::npos) {
@@ -469,8 +488,9 @@ int calc_eq(const char *var, std::vector<std::pair<const char *, int>> var_n_val
   tokens.push_back(*parse_arget);
   //Dump the list
   for (std::list<std::string>::iterator it = tokens.begin(); it != tokens.end(); it++) {
-    temp_val = atoi(it->c_str());
-    if (temp_val == 0) {
+    // temp_val = atoi(it->c_str());
+    temp_val = strtol ( it->c_str() , &endptr , 10 ) ;
+    if (*endptr != '\0') {
       // Two cases: operator or number
       // Operator
       if (!strcmp(it->c_str(), "+") || !strcmp(it->c_str(), "-")
@@ -488,7 +508,6 @@ int calc_eq(const char *var, std::vector<std::pair<const char *, int>> var_n_val
         }
       }
     } else {
-      std::cout << "is_a_val: " << temp_val << std::endl;
       val += temp_val;
     }
     temp_val = 0;
@@ -604,6 +623,10 @@ int main(int argc, char *argv[]) {
   fp = popen(cmd, "r");
   std::vector<std::pair<const char *, int>> var_n_val;
   status = parse_dwarf_calc_bound(unit, fp, dom, var_n_val);
+  // Dump the var_n_val
+  for (auto p : var_n_val) {
+    std::cout << p.first << " : " << p.second << "| ";
+  } std::cout << std::endl;
   status = calc_dom_bound(dom, var_n_val);
   if (status == 1)
   {
