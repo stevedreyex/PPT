@@ -24,6 +24,8 @@
 char *prog_path;    // argv[1]
 char *ppcg_launch;  // argv[2]
 
+typedef enum isl_schedule_node_type isl_schedule_node_type;
+
 typedef struct {
   /* name of the loop index from S[ x, x, x ... ] */
   char *index;
@@ -59,6 +61,21 @@ typedef struct {
   char **variables;
 } domainSpace;
 
+typedef struct extTree extTree;
+struct extTree {
+  isl_schedule_node_type type;
+  /* All data to construct the Tree */
+  domainSpace *dom;
+  /* The ancestor fo the tree node */
+  extTree *parent;
+  /* The children of the tree node */
+  extTree **children;
+  /* The number of children */
+  int child_num;
+  /* Current at which children */
+  int curr_child;
+} ;
+
 #define BUFFER_SIZE 1024 // Increased buffer size
 
 /* The initializer starts */
@@ -90,6 +107,16 @@ domainSpace *init_domainSpace() {
   dom->stmt = (stmtSpace **)(malloc(10 * sizeof(stmtSpace *)));
   dom->variables = (char **)(malloc(10 * sizeof(char *)));
   return dom;
+}
+
+extTree *init_extTree(domainSpace *dom, extTree *parent) {
+  extTree *tree = (extTree *)(malloc(sizeof(extTree)));
+  tree->dom = dom;
+  tree->parent = parent;
+  tree->children = (extTree **)(malloc(10 * sizeof(extTree *)));
+  tree->child_num = 0;
+  tree->curr_child = 0;
+  return tree;
 }
 
 /*
@@ -597,6 +624,87 @@ int calc_dom_bound(domainSpace *dom, std::vector<std::pair<const char *, int>> v
   return 1;
 }
 
+
+isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
+  /* Construction Phase of extTree */
+  extTree **upper_ptr = (extTree **)upper;
+  extTree *parent = *upper_ptr;
+  extTree *current = init_extTree(parent->dom, *upper_ptr);
+  // Rewrite the ptr to the current node
+  printf("parent:\t%p\n", parent);
+  printf("current:\t%p\n", current);
+
+  enum isl_schedule_node_type type;
+  type = isl_schedule_node_get_type(node);
+  switch (type) {
+    case isl_schedule_node_error:
+    /* Error, terminated. */
+      return isl_bool_false;
+      break;
+    case isl_schedule_node_band:
+      current->type = isl_schedule_node_band;
+      printf("This is a isl_schedule_node_band\n");
+      break;
+    case isl_schedule_node_context:
+      current->type = isl_schedule_node_context;
+      printf("This is a isl_schedule_node_context\n");
+      break;
+    case isl_schedule_node_domain:
+      current->type = isl_schedule_node_domain;
+      printf("This is a isl_schedule_node_domain\n");
+      break;
+    case isl_schedule_node_expansion:
+      current->type = isl_schedule_node_expansion;
+      printf("This is a isl_schedule_node_expansion\n");
+      break;
+    case isl_schedule_node_extension:
+      current->type = isl_schedule_node_extension;
+      printf("This is a isl_schedule_node_extension\n");
+      break;
+    case isl_schedule_node_filter:
+      current->type = isl_schedule_node_filter;
+      // Is a hint follow by the sequence node
+      parent->child_num++;
+      parent->children[parent->child_num] = current;
+      printf("This is a isl_schedule_node_filter\n");
+      break;
+    case isl_schedule_node_leaf:
+      current->type = isl_schedule_node_leaf;
+      // Shall back to the sequence where it from
+      free(current);
+      while (parent->type != isl_schedule_node_sequence) {
+        // Child Starts at 1
+        parent = parent->parent;
+      }
+      current = parent;
+      printf("This is a isl_schedule_node_leaf\n");
+      break;
+    case isl_schedule_node_guard:
+      current->type = isl_schedule_node_guard;
+      printf("This is a isl_schedule_node_guard\n");
+      break;
+    case isl_schedule_node_mark:
+      current->type = isl_schedule_node_mark;
+      printf("This is a isl_schedule_node_mark\n");
+      break;
+    case isl_schedule_node_sequence:
+      current->type = isl_schedule_node_sequence;
+      printf("This is a isl_schedule_node_sequence\n");
+      break;
+    case isl_schedule_node_set:
+      current->type = isl_schedule_node_set;
+      printf("This is a isl_schedule_node_set\n");
+      break;
+  }
+
+  *upper_ptr = current;
+
+  if (isl_schedule_node_get_type(node) != isl_schedule_node_leaf)
+    return isl_bool_true;
+
+	return isl_bool_false;
+}
+
 /*
  * Program initialization
  * argv[1]: the path to the binary
@@ -686,17 +794,26 @@ int main(int argc, char *argv[]) {
   }
   #endif
 
+  // Construct the tree
+  extTree *tree = (extTree *)(malloc(sizeof(extTree)));
+  tree->dom = dom;
+  tree->parent = NULL;
+  tree->child_num = 0;
+  tree->curr_child = 0;
+  file = fopen(ret, "r");
+	schedule = isl_schedule_read_from_file(ctx, file);
+  extTree *type = (extTree *)(malloc(sizeof(extTree)));
+  // Is the root node
+  type->parent = NULL;
+  type->dom = dom;
+  isl_stat stat_ret = isl_schedule_foreach_schedule_node_top_down(schedule,
+						&construction, &type);
+
   if (status == 1)
   {
     printf("Error: Unable to extract domain from the schedule\n");
     return 1;
   }
-
-	schedule = isl_schedule_read_from_file(ctx, file);
-  #ifdef DEBUG
-  isl_schedule_dump(schedule);
-  #endif
-
   // Create data structure for collecting address
   /* Parse data may look like this: 
     ##### (after 5 #s)
