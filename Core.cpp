@@ -21,8 +21,36 @@
         return -1; \
     }
 
-char *prog_path;    // argv[1]
-char *ppcg_launch;  // argv[2]
+char *sim_prog_path;    // argv[1]
+char *exe_prog_path;  // argv[2]
+
+typedef  std::uint64_t hash_t;
+constexpr hash_t prime = 0x100000001B3ull;  
+constexpr hash_t basis = 0xCBF29CE484222325ull;  
+  
+hash_t hash_( char const * str)   
+{  
+    hash_t ret{basis};  
+   
+    while (*str){  
+        ret ^= *str;  
+        ret *= prime;  
+        str++;  
+    }  
+   
+    return  ret;  
+}
+
+constexpr hash_t hash_compile_time( char const * str, hash_t last_value = basis)   
+{  
+    return  *str ? hash_compile_time(str+1, (*str ^ last_value) * prime) : last_value;  
+}  
+
+enum accessType{
+    WRITE,
+    READ,
+    CONSTANT
+};
 
 typedef enum isl_schedule_node_type isl_schedule_node_type;
 
@@ -61,6 +89,15 @@ typedef struct {
   char **variables;
 } domainSpace;
 
+// Struct for memory access
+typedef struct{
+    int indent;
+    int lineno;
+    std::string arrarName;
+    accessType type;
+    isl_union_map *access;
+} MemoryAccess;
+
 typedef struct extTree extTree;
 struct extTree {
   isl_schedule_node_type type;
@@ -68,14 +105,21 @@ struct extTree {
   domainSpace *dom;
   /* The ancestor fo the tree node */
   extTree *parent;
-  /* The children of the tree node */
-  extTree **children;
+  /* The children of the tree node. 
+   * Or for leaf node, this is the  access relations
+   */
+  union {
+    MemoryAccess **access_relations;
+    extTree **children;
+  };
   /* The number of children */
   int child_num;
   /* Current at which children */
   int curr_child;
 } ;
 
+
+typedef std::vector<std::pair<int, std::vector<MemoryAccess *> *> *> accessPerStmt;
 #define BUFFER_SIZE 1024 // Increased buffer size
 
 /* The initializer starts */
@@ -198,14 +242,9 @@ void replaceString(char *str, const char *oldSubstr, const char *newSubstr) {
  * @return int arg_count: the number of arguments for ppcg
  */
 int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit) {
-  // with -I flag, at least 2x
-  
   int arg_count = 0;
-  char *arg_list[2*compilation_unit];
   const char *incl = "-I";
 
-  // arg_list[arg_count] = argv[0];
-  // arg_count++;
   char ppcg_args[BUFFER_SIZE/2] = {0};
   char ppcg_call[BUFFER_SIZE] = {0};
 
@@ -219,7 +258,7 @@ int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit) {
   }
 
   char sched[BUFFER_SIZE/4];
-  strcpy(sched, prog_path);
+  strcpy(sched, sim_prog_path);
   char newSubstr[] = "/schedule/";
   char addition[] = ".sched";
   
@@ -231,7 +270,7 @@ int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit) {
   // strcat(ppcg_call, "--save-schedule=/home/dreyex/use_this/schedule/jacobi-2d.sched");
   
   // A "--no-reschedule" flag is added to prevent ppcg from rescheduling the program
-  snprintf(ppcg_call, BUFFER_SIZE-1, "%s %s --no-reschedule --save-schedule=%s", ppcg_launch, ppcg_args, sched);
+  snprintf(ppcg_call, BUFFER_SIZE-1, "%s/ppcg %s --no-reschedule --save-schedule=%s", exe_prog_path, ppcg_args, sched);
   #ifdef DEBUG
   printf("ppcg call: %s\n", ppcg_call);
   #endif
@@ -464,7 +503,7 @@ int extract_dom_from_sched(FILE *file, domainSpace *dom) {
   return status;
 }
 
-int parse_dwarf_calc_bound(char **unit, FILE *fp, domainSpace *dom, 
+int parse_dwarf_calc_bound(FILE *fp, domainSpace *dom, 
                            std::vector<std::pair<const char *, int>> &var_n_val) {
   int status = 0;
   int skip = 1;
@@ -624,7 +663,7 @@ int calc_dom_bound(domainSpace *dom, std::vector<std::pair<const char *, int>> v
   return 1;
 }
 
-
+/* ExtTree Construction callback function */
 isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
   /* Construction Phase of extTree */
   extTree **upper_ptr = (extTree **)upper;
@@ -641,26 +680,44 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
     /* Error, terminated. */
       return isl_bool_false;
       break;
+    
+    /* 
+      * A band node is between filter node (upper) and leaf node
+      * The bound can describe how many time the leaf should execute
+      * Numbers of execution preferred stored in equations, since
+      * not every case the bound is represented by the "N", we shall
+      * recalculate the next level of execution everytime a node has
+      * done all of its execution.
+      */
     case isl_schedule_node_band:
       current->type = isl_schedule_node_band;
       printf("This is a isl_schedule_node_band\n");
       break;
+    
     case isl_schedule_node_context:
       current->type = isl_schedule_node_context;
       printf("This is a isl_schedule_node_context\n");
       break;
+    
     case isl_schedule_node_domain:
       current->type = isl_schedule_node_domain;
       printf("This is a isl_schedule_node_domain\n");
       break;
+    
     case isl_schedule_node_expansion:
       current->type = isl_schedule_node_expansion;
       printf("This is a isl_schedule_node_expansion\n");
       break;
+    
     case isl_schedule_node_extension:
       current->type = isl_schedule_node_extension;
       printf("This is a isl_schedule_node_extension\n");
       break;
+    
+    /*
+     * Filter node points out the statements its child belongs
+     * (Maybe the domainSpace shall know which stmt we're at)
+     */
     case isl_schedule_node_filter:
       current->type = isl_schedule_node_filter;
       // Is a hint follow by the sequence node
@@ -668,6 +725,16 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       parent->children[parent->child_num] = current;
       printf("This is a isl_schedule_node_filter\n");
       break;
+
+    /*
+     * Leaf node is the end of the branch of schedule
+     * which contains the access relations.
+     * Number of times to execute is determined by the band node.
+     * 
+     * In phase of construct, we shall go back to the sequence 
+     * where we from, since the next member of traversal is the 
+     * next sequence item. However, the item has no instance yet.
+     */
     case isl_schedule_node_leaf:
       current->type = isl_schedule_node_leaf;
       // Shall back to the sequence where it from
@@ -679,18 +746,27 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       current = parent;
       printf("This is a isl_schedule_node_leaf\n");
       break;
+    
     case isl_schedule_node_guard:
       current->type = isl_schedule_node_guard;
       printf("This is a isl_schedule_node_guard\n");
       break;
+    
     case isl_schedule_node_mark:
       current->type = isl_schedule_node_mark;
       printf("This is a isl_schedule_node_mark\n");
       break;
+    
+    /*
+     * Sequence node is the only node that has multiple children
+     * Number of children index starts from 1
+     * Followed by filter node
+     */
     case isl_schedule_node_sequence:
       current->type = isl_schedule_node_sequence;
       printf("This is a isl_schedule_node_sequence\n");
       break;
+    
     case isl_schedule_node_set:
       current->type = isl_schedule_node_set;
       printf("This is a isl_schedule_node_set\n");
@@ -705,6 +781,221 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
 	return isl_bool_false;
 }
 
+std::string extractRefName(const std::string& str) {
+  // Find positions of '->' and '['
+  size_t start_pos = str.find("->");
+  size_t end_pos = str.find("[");
+
+  // Check if both delimiters are found
+  if (start_pos == std::string::npos || end_pos == std::string::npos) {
+    return ""; // Return empty string if delimiters not found
+  }
+
+  // Extract substring between delimiters (exclusive)
+  std::string content = str.substr(start_pos + 2, end_pos - start_pos - 2);
+
+  // Trim leading/trailing spaces
+  content.erase(std::remove_if(content.begin(), content.end(), ::isspace), content.end());
+
+  return content;
+}
+
+int get_access_relation_from_pet(accessPerStmt *mem_access, char **unit, int compilation_unit) {
+  char arg_list[BUFFER_SIZE] = {0};
+  char pet_call[BUFFER_SIZE] = {0};
+  const char *incl = "-I";
+
+  for (int i = 0; i < compilation_unit; i++) {
+    if (i)
+      strcat(arg_list, incl);
+    strcat(arg_list, unit[i]);
+    strcat(arg_list, " ");
+  }
+
+  std::cout << "arg_list: " << arg_list << std::endl;
+  snprintf(pet_call, BUFFER_SIZE-1, "%s/pet %s", exe_prog_path, arg_list);
+  char *line_ch = NULL;
+  std::cout << "pet call: " << pet_call << std::endl;
+  std::string line;
+  std::vector<std::string> pet_tree;
+  std::vector<std::string> source_code;
+
+  /* Open the source, check the number of the Statements */
+  std::ifstream source("/home/dreyex/Documents/Research/TraceBench/./stencils/jacobi-2d/jacobi-2d.c");
+  
+  FILE *pet_fp;
+  pet_fp = popen(pet_call, "r");
+  // push pet_fp content line by line into pet_tree
+  if (pet_fp == NULL) {
+    printf("Failed to run command\n");
+    return 1;
+  } 
+  size_t line_length = 0;
+
+  //get pet_fp line by line and save it into pet_tree
+  while (getline(&line_ch, &line_length, pet_fp) != -1) {
+    pet_tree.push_back(line_ch);
+  }
+
+  // push source content line by line into source_code
+  if(!source.is_open()){
+    printf("Failed to run command\n");
+    return 1;
+  }
+  while(getline(source, line)){
+      source_code.push_back(line);
+  }
+
+  std::vector<std::pair<int, int> *> pet_tree_tag = {};
+  std::pair<int, int> *p;
+
+  // Find the statement in the source code
+  for(int i = 0; i < source_code.size(); i++){
+      if(source_code[i][0] == 'S'){
+          int stmt;
+          std::string tag = source_code[i].substr(0, 2);
+          sscanf(tag.c_str(), "S%d:", &stmt);
+          // pet_tree_tag.push_back(make_pair(stmt, i+1));
+          p = new std::pair<int, int>(stmt, i+1);
+          pet_tree_tag.push_back(p);
+      }
+  }
+
+  isl_ctx *ctx = isl_ctx_alloc();
+  int cur_line = 0;
+  int stmt;
+  int i = 0;
+  // Dump the pet_tree
+  for (auto &v : pet_tree){
+      std::cout << v;
+  }
+  for (i; i < pet_tree.size(); i++){
+      if(pet_tree[i] == "statements:\n")
+          break;
+  }
+  int found = 0;
+  char op[BUFFER_SIZE] = {0};
+  std::cout << "i: " << i << std::endl;
+  std::cout << "pet_tree.size(): " << pet_tree.size() << std::endl;
+  // From now on only "- line" starts at the beginning of the line
+  for(i ; i < pet_tree.size();i++){
+      if(pet_tree[i][0] == '-'){
+          // Dump pet_tree_tag
+          // for (auto &v : pet_tree_tag){
+          //     cout << v->first << " " << v->second << endl;
+          // }
+          sscanf(pet_tree[i].c_str(), "- line: %d", &stmt);
+          // cout << "stmt: " << stmt << endl;
+          for (auto &v : pet_tree_tag){
+              if(v->second == stmt){
+                  cur_line++;
+                  // cout << "S" << cur_line << " " << stmt << endl;
+                  found = 1;
+                  break;
+              }
+          }
+      }
+
+
+      if(found){
+          std::pair<int, std::vector<MemoryAccess *> *> *maPair = new std::pair<int, std::vector<MemoryAccess *> *>();
+          std::vector<MemoryAccess *> *list = new std::vector<MemoryAccess *>();
+          maPair->first = cur_line;
+          maPair->second = list;
+          // Start parsing the pet tree current line
+          // get the line with the following format:
+          // (number of blank spaces) type: (type of the statement)
+
+          // Shall not be the next stmt catching for "type"
+
+          i++;
+          while(1){
+              // Go to the line that contains "type"
+              for(i; i < pet_tree.size(); i++){
+                  if(pet_tree[i][0] == '-')
+                      goto end;
+                  if(pet_tree[i].find("type") != std::string::npos){
+                      break;
+                  }
+              }
+              // Get the type of the statement
+              // For example: "    type: expression" -> "expression"
+              char type[20]; // Adjust size based on your needs
+              char expression[100]; // Adjust size based on your needs
+              char access[BUFFER_SIZE]; // Adjust size based on your needs
+
+              // Skip leading whitespace using "%*s"
+              sscanf(pet_tree[i].c_str(), "%*s%*[:]");
+
+              // Read "type:" and the expression
+              sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%s", type, expression);
+
+              // printf("type:%s at %d\n", type, i);
+              MemoryAccess *mem;
+              isl_union_map *union_map;
+              auto str = pet_tree[i];
+              std::string::iterator colon_pos;
+              std::string s(type);
+              size_t start_pos;
+              size_t end_pos;
+              std::string extracted_part;
+              mem = new MemoryAccess();
+              mem->indent = s.find("- type");
+              mem->lineno = i;
+              int is_read = 0;
+
+              switch(hash_(expression)){
+                  case  hash_compile_time( "access" ): 
+                      // cout << "Access" << endl;
+                      i++;
+                      // get the union map of access, find the first pos of ':'
+                      str = pet_tree[i];
+                      start_pos = str.find("{");
+                      end_pos = str.find("}");
+                      extracted_part = str.substr(start_pos, end_pos - start_pos+1);
+                      // cout << "Access: " << extracted_part << endl;
+                      union_map = isl_union_map_read_from_str(ctx, extracted_part.c_str());
+                      mem->access = union_map;
+                      mem->arrarName = extractRefName(extracted_part);
+                      i+=2;
+                      str = pet_tree[i];
+                      sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%d", type, &is_read);
+                      mem->type = is_read ? READ : WRITE;
+                      maPair->second->push_back(mem);
+                      
+                      break;
+                  case  hash_compile_time( "double" ): 
+                      // cout << "Double" << endl;
+                      mem->type = CONSTANT;
+                      i++;
+                      sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%s", type, expression);
+                      mem->arrarName = expression;
+                      maPair->second->push_back(mem);
+                      break;
+                  default:
+                      break;
+              }
+              // Move to next line
+              i++;
+          }
+end:
+          found = 0;
+          // reverse the vector in pair->second
+          sort(maPair->second->begin(), maPair->second->end() , [](const MemoryAccess* a, const MemoryAccess* b) {
+              if (a->indent != b->indent){
+                  return a->indent > b->indent;
+              } else {
+                  return a->lineno > b->lineno;
+              }
+          });
+          mem_access->push_back(maPair);
+      }
+  }
+
+  pclose(pet_fp);
+  return 1;
+}
+
 /*
  * Program initialization
  * argv[1]: the path to the binary
@@ -712,12 +1003,12 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
  */
 int main(int argc, char *argv[]) {
   // initialize 10 ptr to store ppcg call path
-  prog_path = argv[1];
-  ppcg_launch = argv[2];
+  sim_prog_path = argv[1];
+  exe_prog_path = argv[2];
 
   FILE *fp;
   char cmd[BUFFER_SIZE];
-  snprintf(cmd,BUFFER_SIZE-1, "readelf --debug-dump=info %s", prog_path);
+  snprintf(cmd,BUFFER_SIZE-1, "readelf --debug-dump=info %s", sim_prog_path);
   fp = popen(cmd, "r");
   if (fp == NULL) {
       printf("Failed to run command\n");
@@ -775,7 +1066,7 @@ int main(int argc, char *argv[]) {
   // The fp is still open, we can reuse it, but move fd head to the beginning
   fp = popen(cmd, "r");
   std::vector<std::pair<const char *, int>> var_n_val;
-  status = parse_dwarf_calc_bound(unit, fp, dom, var_n_val);
+  status = parse_dwarf_calc_bound(fp, dom, var_n_val);
   // Dump the var_n_val
   for (auto p : var_n_val) {
     std::cout << p.first << " : " << p.second << "| ";
@@ -794,20 +1085,28 @@ int main(int argc, char *argv[]) {
   }
   #endif
 
+  /* Collect the access relation */
+  accessPerStmt *mem_access;
+  mem_access = new accessPerStmt();
+  status = get_access_relation_from_pet(mem_access, unit, compilation_unit);
+
+  std::cout << "mem_access size: " << mem_access->size() << std::endl;
+
+  for(auto v : *mem_access){
+      std::cout << "S" << v->first << std::endl;
+      for(auto m : *v->second){
+          std::cout << m->arrarName << " " << m->type << std::endl;
+          if(m->type != accessType::CONSTANT)
+              isl_union_map_dump(m->access);
+      }
+  }
   // Construct the tree
-  extTree *tree = (extTree *)(malloc(sizeof(extTree)));
-  tree->dom = dom;
-  tree->parent = NULL;
-  tree->child_num = 0;
-  tree->curr_child = 0;
   file = fopen(ret, "r");
+  extTree *tree = init_extTree(dom, NULL);
 	schedule = isl_schedule_read_from_file(ctx, file);
-  extTree *type = (extTree *)(malloc(sizeof(extTree)));
-  // Is the root node
-  type->parent = NULL;
-  type->dom = dom;
+  /* ExtTree Construction with callback function construction() ... */
   isl_stat stat_ret = isl_schedule_foreach_schedule_node_top_down(schedule,
-						&construction, &type);
+						&construction, &tree);
 
   if (status == 1)
   {
@@ -831,7 +1130,7 @@ int main(int argc, char *argv[]) {
     read: [tsteps, n, b0, b1] -> { S2[t, i, j] -> B[-1 + i, j] }
   */
   int stmt = 1;
-  // Read from the file after ##### ooccurs
+  // Read from the file after ##### occurs
   
   // Create pipe descriptors
   int pipe_fd[2];
@@ -877,7 +1176,7 @@ int main(int argc, char *argv[]) {
     execl("/home/dreyex/Documents/Research/PPT/./vg-in-place", "vg-in-place",
           "--tool=cachegrind", "--instr-at-start=no", "--cache-sim=yes",
           "--D1=49152,12,64", "--I1=32768,8,64", "--L2=1310720,10,64", "-v", 
-          "--log-fd=1", prog_path, NULL);
+          "--log-fd=1", sim_prog_path, NULL);
     perror("execl");
     exit(EXIT_FAILURE);
   } else { // Parent process (Program B)
