@@ -4,10 +4,12 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <regex>
 
 #include <isl/arg.h>
 #include <isl/ctx.h>
 #include <isl/options.h>
+#include <isl/union_set.h>
 #include <isl/schedule_node.h>
 
 #include "ppcg/pet/options.h"
@@ -20,11 +22,12 @@
         fprintf(stderr, "Error: %s\n", message); \
         return -1; \
     }
+#define BUFFER_SIZE 1024 // Increased buffer size
 
 char *sim_prog_path;    // argv[1]
 char *exe_prog_path;  // argv[2]
 
-typedef  std::uint64_t hash_t;
+typedef std::uint64_t hash_t;
 constexpr hash_t prime = 0x100000001B3ull;  
 constexpr hash_t basis = 0xCBF29CE484222325ull;  
   
@@ -53,6 +56,17 @@ enum accessType{
 };
 
 typedef enum isl_schedule_node_type isl_schedule_node_type;
+
+// Struct for memory access
+typedef struct{
+    int indent;
+    int lineno;
+    std::string arrarName;
+    accessType type;
+    isl_union_map *access;
+} MemoryAccess;
+
+typedef std::vector<std::pair<int, std::vector<MemoryAccess *> *> *> accessPerStmt;
 
 typedef struct {
   /* name of the loop index from S[ x, x, x ... ] */
@@ -87,16 +101,9 @@ typedef struct {
   stmtSpace **stmt;
   /* the [x, x, x, ...] -> { ... }, the x part, vars for inequality */
   char **variables;
+  /* For tree construction, take on the accessPerStmt */
+  accessPerStmt *mem_access;
 } domainSpace;
-
-// Struct for memory access
-typedef struct{
-    int indent;
-    int lineno;
-    std::string arrarName;
-    accessType type;
-    isl_union_map *access;
-} MemoryAccess;
 
 typedef struct extTree extTree;
 struct extTree {
@@ -115,12 +122,8 @@ struct extTree {
   /* The number of children */
   int child_num;
   /* Current at which children */
-  int curr_child;
+  int curr_stmt;
 } ;
-
-
-typedef std::vector<std::pair<int, std::vector<MemoryAccess *> *> *> accessPerStmt;
-#define BUFFER_SIZE 1024 // Increased buffer size
 
 /* The initializer starts */
 indexBound *init_indexBound() {
@@ -146,6 +149,7 @@ stmtSpace *init_stmtSpace(int stmt_no, int ib_num) {
 
 domainSpace *init_domainSpace() {
   domainSpace *dom = (domainSpace *)(malloc(sizeof(domainSpace)));
+  accessPerStmt *mem_access = NULL;
   dom->stmt_num = 0;
   dom->var_num = 0;
   dom->stmt = (stmtSpace **)(malloc(10 * sizeof(stmtSpace *)));
@@ -157,9 +161,12 @@ extTree *init_extTree(domainSpace *dom, extTree *parent) {
   extTree *tree = (extTree *)(malloc(sizeof(extTree)));
   tree->dom = dom;
   tree->parent = parent;
-  tree->children = (extTree **)(malloc(10 * sizeof(extTree *)));
+  tree->children = NULL;
   tree->child_num = 0;
-  tree->curr_child = 0;
+  if (parent != NULL)
+    tree->curr_stmt = parent->curr_stmt;
+  else
+    tree->curr_stmt = 0;
   return tree;
 }
 
@@ -668,13 +675,17 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
   /* Construction Phase of extTree */
   extTree **upper_ptr = (extTree **)upper;
   extTree *parent = *upper_ptr;
-  extTree *current = init_extTree(parent->dom, *upper_ptr);
   // Rewrite the ptr to the current node
-  printf("parent:\t%p\n", parent);
-  printf("current:\t%p\n", current);
+  extTree *current = init_extTree(parent->dom, *upper_ptr);
 
   enum isl_schedule_node_type type;
   type = isl_schedule_node_get_type(node);
+  isl_union_set *filter_temp;
+  std::vector<MemoryAccess *> *cur_mem_access;
+  std::string filter_str;
+  std::regex pattern("S(\\d+)");
+  std::smatch match;
+  int curr_stmt = 0;
   switch (type) {
     case isl_schedule_node_error:
     /* Error, terminated. */
@@ -719,10 +730,22 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
      * (Maybe the domainSpace shall know which stmt we're at)
      */
     case isl_schedule_node_filter:
+      filter_temp = isl_schedule_node_filter_get_filter(node);
+      filter_str = isl_union_set_to_str(filter_temp);
+    // Something like [tsteps, n] -> { S1[t, i, j] }
+      if (std::regex_search(filter_str, match, pattern)) {
+      // Extract the number after "S"
+        std::string number_str = match[1];
+        current->curr_stmt = std::stoi(number_str);
+      }
+
+    // fetch stmt_no from the filter_str
+      printf("stmt_no: %d\n", curr_stmt);
+      isl_union_set_free(filter_temp);
       current->type = isl_schedule_node_filter;
       // Is a hint follow by the sequence node
-      parent->child_num++;
       parent->children[parent->child_num] = current;
+      parent->child_num++;
       printf("This is a isl_schedule_node_filter\n");
       break;
 
@@ -737,8 +760,23 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
      */
     case isl_schedule_node_leaf:
       current->type = isl_schedule_node_leaf;
+      // From accessPerStmt in domainSpace find the access of this stmt
+      curr_stmt = 0;
+      for (auto v : *current->dom->mem_access) {
+        if (v->first == current->curr_stmt) {
+          break;
+        } else {
+          curr_stmt++;
+        }
+      }
+      cur_mem_access = current->dom->mem_access->at(curr_stmt)->second;
+      current->access_relations = (MemoryAccess **)(malloc(cur_mem_access->size() * sizeof(MemoryAccess *)));
+      for (auto v : *cur_mem_access) {
+        // Do something with the access relation
+        current->access_relations[current->child_num] = v;
+        current->child_num++;
+      }
       // Shall back to the sequence where it from
-      free(current);
       while (parent->type != isl_schedule_node_sequence) {
         // Child Starts at 1
         parent = parent->parent;
@@ -759,11 +797,11 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
     
     /*
      * Sequence node is the only node that has multiple children
-     * Number of children index starts from 1
      * Followed by filter node
      */
     case isl_schedule_node_sequence:
       current->type = isl_schedule_node_sequence;
+      current->children = (extTree **)(malloc(10 * sizeof(extTree *)));
       printf("This is a isl_schedule_node_sequence\n");
       break;
     
@@ -821,7 +859,7 @@ int get_access_relation_from_pet(accessPerStmt *mem_access, char **unit, int com
   std::vector<std::string> source_code;
 
   /* Open the source, check the number of the Statements */
-  std::ifstream source("/home/dreyex/Documents/Research/TraceBench/./stencils/jacobi-2d/jacobi-2d.c");
+  std::ifstream source(unit[0]);
   
   FILE *pet_fp;
   pet_fp = popen(pet_call, "r");
@@ -865,10 +903,7 @@ int get_access_relation_from_pet(accessPerStmt *mem_access, char **unit, int com
   int cur_line = 0;
   int stmt;
   int i = 0;
-  // Dump the pet_tree
-  for (auto &v : pet_tree){
-      std::cout << v;
-  }
+
   for (i; i < pet_tree.size(); i++){
       if(pet_tree[i] == "statements:\n")
           break;
@@ -1088,6 +1123,8 @@ int main(int argc, char *argv[]) {
   /* Collect the access relation */
   accessPerStmt *mem_access;
   mem_access = new accessPerStmt();
+
+  dom->mem_access = mem_access;
   status = get_access_relation_from_pet(mem_access, unit, compilation_unit);
 
   std::cout << "mem_access size: " << mem_access->size() << std::endl;
