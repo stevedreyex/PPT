@@ -24,6 +24,8 @@
     }
 #define BUFFER_SIZE 1024 // Increased buffer size
 
+#define IDT(n) for (int i = 0; i < n; i++) printf(" ");
+
 char *sim_prog_path;    // argv[1]
 char *exe_prog_path;  // argv[2]
 
@@ -61,8 +63,8 @@ typedef enum isl_schedule_node_type isl_schedule_node_type;
 typedef struct{
     int indent;
     int lineno;
-    std::string arrarName;
     accessType type;
+    std::string arrarName;
     isl_union_map *access;
 } MemoryAccess;
 
@@ -86,7 +88,7 @@ typedef struct  {
   int stmt_no;
   /* the {Sn[x, x, x, ...] : constraints ; ... }, the x part, vars for inequality */
   char **names;
-  /* Number of indexBound, also the number of stmts (in dom) */
+  /* Number of indexBound, also the number of constraints (in dom) */
   int ib_num;
   /* the constraint part, the constraint for each stmt */
   indexBound** ib;
@@ -123,6 +125,12 @@ struct extTree {
   int child_num;
   /* Current at which children */
   int curr_stmt;
+  /* For sim information, the index bound this band */
+  indexBound *ib;
+  /* For sim phase, should recalc everytime the execution time */
+  int execution_time;
+  /* For sim phase, which time already executed? */
+  int curr_exec_time;
 } ;
 
 /* The initializer starts */
@@ -159,9 +167,10 @@ domainSpace *init_domainSpace() {
 
 extTree *init_extTree(domainSpace *dom, extTree *parent) {
   extTree *tree = (extTree *)(malloc(sizeof(extTree)));
+  tree->type = isl_schedule_node_error;
   tree->dom = dom;
   tree->parent = parent;
-  tree->children = NULL;
+  tree->children = (extTree **)(malloc(10 * sizeof(extTree *)));
   tree->child_num = 0;
   if (parent != NULL)
     tree->curr_stmt = parent->curr_stmt;
@@ -670,6 +679,19 @@ int calc_dom_bound(domainSpace *dom, std::vector<std::pair<const char *, int>> v
   return 1;
 }
 
+indexBound *find_index_bound_from_stmt(domainSpace *dom, int stmt_no, std::string index) {
+  for (int i = 0; i < dom->stmt_num; i++) {
+    if (dom->stmt[i]->stmt_no == stmt_no) {
+      for (int j = 0; j < dom->stmt[i]->ib_num; j++) {
+        if (!strcmp(dom->stmt[i]->ib[j]->index, index.c_str())) {
+          return dom->stmt[i]->ib[j];
+        }
+      }
+    }
+  }
+  return NULL;
+}
+
 /* ExtTree Construction callback function */
 isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
   /* Construction Phase of extTree */
@@ -681,10 +703,12 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
   enum isl_schedule_node_type type;
   type = isl_schedule_node_get_type(node);
   isl_union_set *filter_temp;
+  isl_union_map *band_temp;
   std::vector<MemoryAccess *> *cur_mem_access;
-  std::string filter_str;
+  std::string isl_obj_str;
   std::regex pattern("S(\\d+)");
   std::smatch match;
+  std::string index;
   int curr_stmt = 0;
   switch (type) {
     case isl_schedule_node_error:
@@ -701,28 +725,58 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       * done all of its execution.
       */
     case isl_schedule_node_band:
+      parent->children[parent->child_num] = current;
+      parent->child_num++;
       current->type = isl_schedule_node_band;
-      printf("This is a isl_schedule_node_band\n");
+      band_temp = isl_schedule_node_get_subtree_schedule_union_map(node);
+      isl_obj_str = isl_union_map_to_str(band_temp);
+      // Something like band: [tsteps, n] -> { S1[t, i, j] -> [i, j] }
+      if (std::regex_search(isl_obj_str, match, pattern)) {
+      // Extract the number after "S"
+        std::string number_str = match[1];
+        curr_stmt = std::stoi(number_str);
+      }
+      if (curr_stmt){
+        // Find from isl_obj_str, the last pair of [ and , the content between it, is the index
+        size_t start_pos = isl_obj_str.find_last_of("[");
+        // From this pos find the next ","
+        size_t end_pos = isl_obj_str.find(",", start_pos);
+        if (end_pos == std::string::npos) {
+          // If not found, find the next "]"
+          end_pos = isl_obj_str.find("]", start_pos);
+        }
+        // fetch the content between the two pos
+        index = isl_obj_str.substr(start_pos + 1, end_pos - start_pos - 1);
+        #ifdef DEBUG
+        std::cout << "index: " << index << " of S" << curr_stmt << std::endl;
+        #endif
+
+      }
+      current->ib = find_index_bound_from_stmt(current->dom, curr_stmt, index);
       break;
     
     case isl_schedule_node_context:
+      parent->children[parent->child_num] = current;
+      parent->child_num++;
       current->type = isl_schedule_node_context;
-      printf("This is a isl_schedule_node_context\n");
       break;
     
     case isl_schedule_node_domain:
+      parent->children[parent->child_num] = current;
+      parent->child_num++;
       current->type = isl_schedule_node_domain;
-      printf("This is a isl_schedule_node_domain\n");
       break;
     
     case isl_schedule_node_expansion:
+      parent->children[parent->child_num] = current;
+      parent->child_num++;
       current->type = isl_schedule_node_expansion;
-      printf("This is a isl_schedule_node_expansion\n");
       break;
     
     case isl_schedule_node_extension:
+      parent->children[parent->child_num] = current;
+      parent->child_num++;
       current->type = isl_schedule_node_extension;
-      printf("This is a isl_schedule_node_extension\n");
       break;
     
     /*
@@ -730,23 +784,23 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
      * (Maybe the domainSpace shall know which stmt we're at)
      */
     case isl_schedule_node_filter:
+      parent->children[parent->child_num] = current;
       filter_temp = isl_schedule_node_filter_get_filter(node);
-      filter_str = isl_union_set_to_str(filter_temp);
-    // Something like [tsteps, n] -> { S1[t, i, j] }
-      if (std::regex_search(filter_str, match, pattern)) {
+      isl_obj_str = isl_union_set_to_str(filter_temp);
+      // Something like [tsteps, n] -> { S1[t, i, j] }
+      if (std::regex_search(isl_obj_str, match, pattern)) {
       // Extract the number after "S"
         std::string number_str = match[1];
         current->curr_stmt = std::stoi(number_str);
       }
 
-    // fetch stmt_no from the filter_str
+      // fetch stmt_no from the isl_obj_str
       printf("stmt_no: %d\n", curr_stmt);
       isl_union_set_free(filter_temp);
       current->type = isl_schedule_node_filter;
       // Is a hint follow by the sequence node
       parent->children[parent->child_num] = current;
       parent->child_num++;
-      printf("This is a isl_schedule_node_filter\n");
       break;
 
     /*
@@ -759,6 +813,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
      * next sequence item. However, the item has no instance yet.
      */
     case isl_schedule_node_leaf:
+      parent->children[parent->child_num] = current;
       current->type = isl_schedule_node_leaf;
       // From accessPerStmt in domainSpace find the access of this stmt
       curr_stmt = 0;
@@ -782,17 +837,18 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
         parent = parent->parent;
       }
       current = parent;
-      printf("This is a isl_schedule_node_leaf\n");
       break;
     
     case isl_schedule_node_guard:
+      parent->children[parent->child_num] = current;
+      parent->child_num++;
       current->type = isl_schedule_node_guard;
-      printf("This is a isl_schedule_node_guard\n");
       break;
     
     case isl_schedule_node_mark:
+      parent->children[parent->child_num] = current;
+      parent->child_num++;
       current->type = isl_schedule_node_mark;
-      printf("This is a isl_schedule_node_mark\n");
       break;
     
     /*
@@ -800,17 +856,21 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
      * Followed by filter node
      */
     case isl_schedule_node_sequence:
+      parent->children[parent->child_num] = current;
+      parent->child_num++;
       current->type = isl_schedule_node_sequence;
       current->children = (extTree **)(malloc(10 * sizeof(extTree *)));
-      printf("This is a isl_schedule_node_sequence\n");
       break;
     
     case isl_schedule_node_set:
+      parent->children[parent->child_num] = current;
+      parent->child_num++;
       current->type = isl_schedule_node_set;
-      printf("This is a isl_schedule_node_set\n");
       break;
   }
-
+  printf("current: %p\n", current);
+  printf("parent->child_num: %d\n", parent->child_num);
+  printf("This %d\n", current->type);
   *upper_ptr = current;
 
   if (isl_schedule_node_get_type(node) != isl_schedule_node_leaf)
@@ -904,6 +964,8 @@ int get_access_relation_from_pet(accessPerStmt *mem_access, char **unit, int com
   int stmt;
   int i = 0;
 
+
+  // TODO: Fidn the array part, since they are the smybol starts that we shall collect later
   for (i; i < pet_tree.size(); i++){
       if(pet_tree[i] == "statements:\n")
           break;
@@ -1032,6 +1094,31 @@ end:
 }
 
 /*
+ * Dump of the tree, also the structure to represent
+ */
+int extTree_traverse(extTree *tree, int n){
+  if(tree == NULL){
+    return 0;
+  }
+  // Main content tree node
+  IDT(n) std::cout << "node type: " << tree->type << std::endl;
+  IDT(n) std::cout << "child_num: " << tree->child_num << std::endl;
+  IDT(n) std::cout << "curr_stmt: " << tree->curr_stmt << std::endl;
+
+  MemoryAccess *ar = NULL;
+  for(int i = 0; i < tree->child_num; i++){
+    if (tree->type != isl_schedule_node_leaf)
+      extTree_traverse(tree->children[i], n+2);
+    else {
+      ar = tree->access_relations[i];
+      IDT(n) std::cout << ar->type << " " << ar->arrarName << " &";
+      IDT(n) isl_union_map_dump(ar->access);
+    }
+  }
+  return 1;
+}
+
+/*
  * Program initialization
  * argv[1]: the path to the binary
  * argv[2]: ppcg launch path
@@ -1140,10 +1227,18 @@ int main(int argc, char *argv[]) {
   // Construct the tree
   file = fopen(ret, "r");
   extTree *tree = init_extTree(dom, NULL);
+  tree->child_num = 0;
+  tree->type = isl_schedule_node_domain;
 	schedule = isl_schedule_read_from_file(ctx, file);
   /* ExtTree Construction with callback function construction() ... */
   isl_stat stat_ret = isl_schedule_foreach_schedule_node_top_down(schedule,
 						&construction, &tree);
+  /* Back to tree head */
+  while (tree->parent != NULL) {
+    tree = tree->parent;
+  }
+
+  int trav = extTree_traverse(tree->children[0], 0);
 
   if (status == 1)
   {
