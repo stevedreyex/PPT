@@ -26,8 +26,9 @@
 
 #define IDT(n) for (int i = 0; i < n; i++) printf(" ");
 
-char *sim_prog_path;    // argv[1]
+char *sim_prog_path;  // argv[1]
 char *exe_prog_path;  // argv[2]
+char *pet_prog_args;  // argv[3]
 
 typedef std::uint64_t hash_t;
 constexpr hash_t prime = 0x100000001B3ull;  
@@ -59,7 +60,23 @@ enum accessType{
 
 typedef enum isl_schedule_node_type isl_schedule_node_type;
 
-// Struct for memory access
+typedef struct{
+  /* Name of the array */
+  std::string name;
+  /* 
+   * Different with var_n_val<const char *, int> 
+   * This element describe the whole size of array
+   * Not limited to the iteration space 
+   * It is not like the iteration space
+   * An array always have its start address from 0
+   */
+  std::pair<std::string, int> *var_n_val;
+  /* The start of array, for calculation, known till addr gen */
+  long long int start_addr;
+}ArrayRef;
+
+/* Struct for memory access                       */
+/* Small item per access serves for accessPerStmt */
 typedef struct{
     int indent;
     int lineno;
@@ -104,6 +121,7 @@ typedef struct {
   /* the [x, x, x, ...] -> { ... }, the x part, vars for inequality */
   char **variables;
   /* For tree construction, take on the accessPerStmt */
+  /* Data is from pet tree */
   accessPerStmt *mem_access;
 } domainSpace;
 
@@ -625,7 +643,7 @@ int calc_eq(const char *var, std::vector<std::pair<const char *, int>> var_n_val
         // Might have subsitution
         for (auto p : var_n_val) {
           if (!strcmp(p.first, it->c_str())) {
-            std::cout << "substituting: " << it->c_str() << " to " << p.second << std::endl;
+            // std::cout << "substituting: " << it->c_str() << " to " << p.second << std::endl;
             temp_val = p.second;
             val += temp_val;
             break;
@@ -748,7 +766,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
         // fetch the content between the two pos
         index = isl_obj_str.substr(start_pos + 1, end_pos - start_pos - 1);
         #ifdef DEBUG
-        std::cout << "index: " << index << " of S" << curr_stmt << std::endl;
+        // std::cout << "index: " << index << " of S" << curr_stmt << std::endl;
         #endif
 
       }
@@ -795,7 +813,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       }
 
       // fetch stmt_no from the isl_obj_str
-      printf("stmt_no: %d\n", curr_stmt);
+      // printf("stmt_no: %d\n", curr_stmt);
       isl_union_set_free(filter_temp);
       current->type = isl_schedule_node_filter;
       // Is a hint follow by the sequence node
@@ -868,9 +886,9 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       current->type = isl_schedule_node_set;
       break;
   }
-  printf("current: %p\n", current);
-  printf("parent->child_num: %d\n", parent->child_num);
-  printf("This %d\n", current->type);
+  // printf("current: %p\n", current);
+  // printf("parent->child_num: %d\n", parent->child_num);
+  // printf("This %d\n", current->type);
   *upper_ptr = current;
 
   if (isl_schedule_node_get_type(node) != isl_schedule_node_leaf)
@@ -911,7 +929,7 @@ int get_access_relation_from_pet(accessPerStmt *mem_access, char **unit, int com
   }
 
   std::cout << "arg_list: " << arg_list << std::endl;
-  snprintf(pet_call, BUFFER_SIZE-1, "%s/pet %s", exe_prog_path, arg_list);
+  snprintf(pet_call, BUFFER_SIZE-1, "%s/pet %s %s", exe_prog_path, arg_list, pet_prog_args);
   char *line_ch = NULL;
   std::cout << "pet call: " << pet_call << std::endl;
   std::string line;
@@ -963,7 +981,6 @@ int get_access_relation_from_pet(accessPerStmt *mem_access, char **unit, int com
   int cur_line = 0;
   int stmt;
   int i = 0;
-
 
   // TODO: Fidn the array part, since they are the smybol starts that we shall collect later
   for (i; i < pet_tree.size(); i++){
@@ -1127,7 +1144,16 @@ int main(int argc, char *argv[]) {
   // initialize 10 ptr to store ppcg call path
   sim_prog_path = argv[1];
   exe_prog_path = argv[2];
+  pet_prog_args = argv[3];
+  int status = 0;
 
+  /* 
+   * int parse_dwarf(char **unit, FILE *fp)
+   *
+   * For launching the PPCG/pet to get the schedule/pet tree, 
+   * Collect all file names that are needed to be included
+   * from the dawrf of executable
+   */
   FILE *fp;
   char cmd[BUFFER_SIZE];
   snprintf(cmd,BUFFER_SIZE-1, "readelf --debug-dump=info %s", sim_prog_path);
@@ -1136,8 +1162,6 @@ int main(int argc, char *argv[]) {
       printf("Failed to run command\n");
       exit(1);
   }
-
-  // Same size as sched
   char *ret = (char *)(malloc(BUFFER_SIZE*sizeof(char) / 4));
   char **unit = (char **)(malloc(10 * sizeof(char *)));
   int compilation_unit = parse_dwarf(unit, fp);
@@ -1152,79 +1176,109 @@ int main(int argc, char *argv[]) {
       }
   }
   #endif
+  /* 
+   * int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit)
+   *
+   * Launch PPCG, get computed schedule, and reload it to the program later
+   * We don't want a computed schedule for GPU, so we don't need the reschedule
+   */
   int arg_count = get_computed_sched_from_ppcg(unit, ret, compilation_unit);
-
   if(!ret){
     printf("Error: ppcg call failed\n");
     return 1;
   }
-
   #ifdef DEBUG
   printf("The schedule is at %s\n", ret);
   #endif
-
-  // Launch PPCG, get computed schedule, and reload it to the program
-  // We may extract this part to another program later
-  /*                  Extracttion                  */
+  /*
+   * int extract_dom_from_sched(FILE *file, domainSpace *dom)
+   *
+   * From schedule computed from PPCG, extract the domain of each statement 
+   * and the iteration space of each statement (constraints) 
+   * We may extract this part to another program later 
+   * 
+   * TODO: The ub/lb var is not very neat, some case the blank space is remained
+   */
   isl_ctx *ctx;
   isl_schedule *schedule;
 	ctx = isl_ctx_alloc();
-
   FILE *file;
 	file = fopen(ret, "r");
 	if (!file) {
 		fprintf(stderr, "Unable to open '%s' for reading\n", ret);
 		return 1;
 	}
-
-  int status = 0;
-
-  /* Part start to parse the domain from schedule tree domain */
   domainSpace *dom = init_domainSpace();
   status = extract_dom_from_sched(file, dom);
-  
-  // Reparse the dwarf to get the loop bound actual val
-  // TODO
-  // The fp is still open, we can reuse it, but move fd head to the beginning
+  /* 
+   * int parse_dwarf_calc_bound(FILE *fp, domainSpace *dom, 
+   *                            std::vector<std::pair<const char *, int>> &var_n_val)
+   * 
+   * For variable like N, which is the index bound var,
+   * that we can know before the execution. 
+   * Find the acutal value from dwarf, reparse the dwarf  
+   */
   fp = popen(cmd, "r");
   std::vector<std::pair<const char *, int>> var_n_val;
   status = parse_dwarf_calc_bound(fp, dom, var_n_val);
-  // Dump the var_n_val
+  #ifdef DEBUG  
   for (auto p : var_n_val) {
     std::cout << p.first << " : " << p.second << "| ";
   } std::cout << std::endl;
+  #endif
+  /* 
+   * int calc_dom_bound(domainSpace *dom, std::vector<std::pair<const char *, int>> var_n_val)
+   *
+   * Use found vars to calculate the actual value of the variable
+   * The ub_val and lb_val will bound the iteration space in such form:
+   *                lb <= var <= ub , 0 <= lb <= ub
+   * if there is unknown value, e.g. bounded by parent band node, lb/ub_val = -1
+   * We could only know it until the execution. 
+   */
   status = calc_dom_bound(dom, var_n_val);
-
   #ifdef DEBUG
   for (int i = 0; i < dom->stmt_num; i++) {
     stmtSpace *stmt = dom->stmt[i];
     std::cout << "S" << stmt->stmt_no << std::endl;
     for (int j = 0; j < stmt->ib_num; j++) {
       indexBound *ib = stmt->ib[j];
-      std::cout << "lb: " << ib->lb << " / " << ib->lb_val 
-                << " ub: " << ib->ub << " / " << ib->ub_val << std::endl;
+      std::cout << "lb: " << ib->lb << ":" << ib->lb_val 
+                << " <= " << ib->index << " <="
+                << " ub: " << ib->ub << ":" << ib->ub_val << std::endl;
     }
   }
   #endif
-
-  /* Collect the access relation */
+  /* 
+   * int get_access_relation_from_pet(accessPerStmt *mem_access, char **unit, int compilation_unit)
+   *
+   * From pet tree, collect the data we needed for the program
+   * Arrays, access relation, and prepare for 1st access
+   */
   accessPerStmt *mem_access;
   mem_access = new accessPerStmt();
-
   dom->mem_access = mem_access;
   status = get_access_relation_from_pet(mem_access, unit, compilation_unit);
-
   std::cout << "mem_access size: " << mem_access->size() << std::endl;
-
+  #ifdef DEBUG
+  char *dump_str;
   for(auto v : *mem_access){
       std::cout << "S" << v->first << std::endl;
       for(auto m : *v->second){
           std::cout << m->arrarName << " " << m->type << std::endl;
-          if(m->type != accessType::CONSTANT)
-              isl_union_map_dump(m->access);
+          if(m->type != accessType::CONSTANT){
+              dump_str = isl_union_map_to_str(m->access);
+              std::cout << dump_str << std::endl;
+              free(dump_str);
+          }
       }
   }
-  // Construct the tree
+  #endif
+  /* 
+   * int extTree_traverse(extTree *tree, int n)
+   *
+   * A coustomized tree structure extTree, similar to schedule tree
+   * Can be used for simulation
+   */ 
   file = fopen(ret, "r");
   extTree *tree = init_extTree(dom, NULL);
   tree->child_num = 0;
