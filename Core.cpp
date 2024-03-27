@@ -29,6 +29,7 @@
 char *sim_prog_path;  // argv[1]
 char *exe_prog_path;  // argv[2]
 char *pet_prog_args;  // argv[3]
+std::vector<std::pair<const char *, int>> var_n_val;
 
 typedef std::uint64_t hash_t;
 constexpr hash_t prime = 0x100000001B3ull;  
@@ -62,7 +63,7 @@ typedef enum isl_schedule_node_type isl_schedule_node_type;
 
 typedef struct{
   /* Name of the array */
-  std::string name;
+  char *name;
   /* 
    * Different with var_n_val<const char *, int> 
    * This element describe the whole size of array
@@ -70,10 +71,10 @@ typedef struct{
    * It is not like the iteration space
    * An array always have its start address from 0
    */
-  std::pair<std::string, int> *var_n_val;
+  std::set<std::pair<const char *, int> *> *var_n_val;
   /* The start of array, for calculation, known till addr gen */
-  long long int start_addr;
-}ArrayRef;
+  unsigned long long int start_addr;
+} ArrayRef;
 
 /* Struct for memory access                       */
 /* Small item per access serves for accessPerStmt */
@@ -116,6 +117,8 @@ typedef struct {
   int stmt_num;
   /* Number of undetermined vars */
   int var_num;
+  /* number of array structure this program */
+  int array_num;
   /* The address of the statement */
   stmtSpace **stmt;
   /* the [x, x, x, ...] -> { ... }, the x part, vars for inequality */
@@ -123,6 +126,9 @@ typedef struct {
   /* For tree construction, take on the accessPerStmt */
   /* Data is from pet tree */
   accessPerStmt *mem_access;
+  /* All array structure member of the whole program */
+  // ArrayRef **array_refs;
+  std::unordered_map<std::string, ArrayRef *> *array_refs;
 } domainSpace;
 
 typedef struct extTree extTree;
@@ -178,8 +184,10 @@ domainSpace *init_domainSpace() {
   accessPerStmt *mem_access = NULL;
   dom->stmt_num = 0;
   dom->var_num = 0;
+  dom->array_num = 0;
   dom->stmt = (stmtSpace **)(malloc(10 * sizeof(stmtSpace *)));
   dom->variables = (char **)(malloc(10 * sizeof(char *)));
+  dom->array_refs = new std::unordered_map<std::string, ArrayRef *>();
   return dom;
 }
 
@@ -195,6 +203,15 @@ extTree *init_extTree(domainSpace *dom, extTree *parent) {
   else
     tree->curr_stmt = 0;
   return tree;
+}
+
+ArrayRef *init_ArrayRef(std::string name) {
+  ArrayRef *array = (ArrayRef *)(malloc(sizeof(ArrayRef)));
+  array->name = (char *)(malloc(name.length() + 1));
+  strcpy(array->name, name.c_str());
+  array->var_n_val = new std::set<std::pair<const char *, int> *>();
+  array->start_addr = 0;
+  return array;
 }
 
 /*
@@ -537,8 +554,7 @@ int extract_dom_from_sched(FILE *file, domainSpace *dom) {
   return status;
 }
 
-int parse_dwarf_calc_bound(FILE *fp, domainSpace *dom, 
-                           std::vector<std::pair<const char *, int>> &var_n_val) {
+int parse_dwarf_calc_bound(FILE *fp, domainSpace *dom) {
   int status = 0;
   int skip = 1;
   int found = 0;
@@ -606,10 +622,9 @@ int parse_dwarf_calc_bound(FILE *fp, domainSpace *dom,
 /*
  * Calculate the value of the variable
  * @param in const char *var: the variable name
- * @param in std::vector<std::pair<const char *, int>> var_n_val: the list of variable and its value
  * @return int: the "actual calculated" value of the variable
  */
-int calc_eq(const char *var, std::vector<std::pair<const char *, int>> var_n_val) {
+int calc_eq(const char *var) {
   // tokenize the var, make all elem to list, sepqrate by " "
   long int temp_val = 0;
   long int val = 0;
@@ -660,7 +675,7 @@ int calc_eq(const char *var, std::vector<std::pair<const char *, int>> var_n_val
 
 }
 
-int calc_dom_bound(domainSpace *dom, std::vector<std::pair<const char *, int>> var_n_val) {
+int calc_dom_bound(domainSpace *dom) {
   // First dump all ib in dom
   #ifdef DEBUG
   for (int i = 0; i < dom->stmt_num; i++) {
@@ -687,9 +702,9 @@ int calc_dom_bound(domainSpace *dom, std::vector<std::pair<const char *, int>> v
     stmtSpace *stmt = dom->stmt[i];
     for (int j = 0; j < stmt->ib_num; j++) {
       indexBound *ib = stmt->ib[j];
-      ib->ub_val = calc_eq(ib->ub, var_n_val);
+      ib->ub_val = calc_eq(ib->ub);
       if (ib->is_gt) ib->ub_val--;
-      ib->lb_val = calc_eq(ib->lb, var_n_val);
+      ib->lb_val = calc_eq(ib->lb);
       if (ib->is_lt) ib->lb_val++;
     }
   }
@@ -708,6 +723,17 @@ indexBound *find_index_bound_from_stmt(domainSpace *dom, int stmt_no, std::strin
     }
   }
   return NULL;
+}
+
+int extract_stmt_no_regex(std::string str) {
+  std::regex pattern("S(\\d+)");
+  std::smatch match;
+  if (std::regex_search(str, match, pattern)) {
+    // Extract the number after "S"
+    std::string number_str = match[1];
+    return std::stoi(number_str);
+  }
+  return -1;
 }
 
 /* ExtTree Construction callback function */
@@ -805,12 +831,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       parent->children[parent->child_num] = current;
       filter_temp = isl_schedule_node_filter_get_filter(node);
       isl_obj_str = isl_union_set_to_str(filter_temp);
-      // Something like [tsteps, n] -> { S1[t, i, j] }
-      if (std::regex_search(isl_obj_str, match, pattern)) {
-      // Extract the number after "S"
-        std::string number_str = match[1];
-        current->curr_stmt = std::stoi(number_str);
-      }
+      current->curr_stmt = extract_stmt_no_regex(isl_obj_str);
 
       // fetch stmt_no from the isl_obj_str
       // printf("stmt_no: %d\n", curr_stmt);
@@ -900,7 +921,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
 std::string extractRefName(const std::string& str) {
   // Find positions of '->' and '['
   size_t start_pos = str.find("->");
-  size_t end_pos = str.find("[");
+  size_t end_pos = str.find("[", start_pos);
 
   // Check if both delimiters are found
   if (start_pos == std::string::npos || end_pos == std::string::npos) {
@@ -916,7 +937,7 @@ std::string extractRefName(const std::string& str) {
   return content;
 }
 
-int get_access_relation_from_pet(accessPerStmt *mem_access, char **unit, int compilation_unit) {
+int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, char **unit, int compilation_unit) {
   char arg_list[BUFFER_SIZE] = {0};
   char pet_call[BUFFER_SIZE] = {0};
   const char *incl = "-I";
@@ -982,128 +1003,194 @@ int get_access_relation_from_pet(accessPerStmt *mem_access, char **unit, int com
   int stmt;
   int i = 0;
 
-  // TODO: Fidn the array part, since they are the smybol starts that we shall collect later
+  for (i; i < pet_tree.size(); i++){
+      if(pet_tree[i] == "arrays:\n")
+          break;
+  }
+  // Collect the array subscript each stmt first in case array filled out
+  std::set<std::string> ind_names;
+  for (int j = 0; j < dom->stmt_num; j++){
+    for (int k = 0; k < dom->stmt[j]->ib_num; k++){
+      if (ind_names.find(dom->stmt[j]->ib[k]->index) == ind_names.end()){
+        ind_names.insert(dom->stmt[j]->ib[k]->index);
+      }
+    }
+  }
+  int arrays_start = i;
+  // end of the array part is the stmt
   for (i; i < pet_tree.size(); i++){
       if(pet_tree[i] == "statements:\n")
           break;
   }
+  int checkpoint = i;
+  ArrayRef *array;
+  auto map = dom->array_refs;
+  for (int arr_i = arrays_start; arr_i < checkpoint; arr_i++){
+    int pos = pet_tree[arr_i].find("extent");
+    if (pos == std::string::npos) continue;
+    // find string at the first "{ ", end of "[" after it
+    size_t start_pos = pet_tree[arr_i].find("{");
+    size_t end_pos = pet_tree[arr_i].find("[", start_pos);
+    std::string array_name = pet_tree[arr_i].substr(start_pos + 2, end_pos - start_pos - 2);
+    // array_name find in ind_names then continue
+    if (ind_names.find(array_name) != ind_names.end()) continue;
+    std::cout << "array_name: " << array_name << std::endl; 
+    array = init_ArrayRef(array_name);
+    map->insert(std::pair<std::string, ArrayRef *>(array_name, array));
+  }
+  
   int found = 0;
+  int curr_stmt = 0;
   char op[BUFFER_SIZE] = {0};
   std::cout << "i: " << i << std::endl;
   std::cout << "pet_tree.size(): " << pet_tree.size() << std::endl;
   // From now on only "- line" starts at the beginning of the line
   for(i ; i < pet_tree.size();i++){
-      if(pet_tree[i][0] == '-'){
-          // Dump pet_tree_tag
-          // for (auto &v : pet_tree_tag){
-          //     cout << v->first << " " << v->second << endl;
-          // }
-          sscanf(pet_tree[i].c_str(), "- line: %d", &stmt);
-          // cout << "stmt: " << stmt << endl;
-          for (auto &v : pet_tree_tag){
-              if(v->second == stmt){
-                  cur_line++;
-                  // cout << "S" << cur_line << " " << stmt << endl;
-                  found = 1;
+    if(pet_tree[i][0] == '-'){
+      // Dump pet_tree_tag
+      // for (auto &v : pet_tree_tag){
+      //     cout << v->first << " " << v->second << endl;
+      // }
+      sscanf(pet_tree[i].c_str(), "- line: %d", &stmt);
+      // cout << "stmt: " << stmt << endl;
+      for (auto &v : pet_tree_tag){
+        if(v->second == stmt){
+            cur_line++;
+            // cout << "S" << cur_line << " " << stmt << endl;
+            found = 1;
+            break;
+        }
+      }
+    }
+
+
+    if(found){
+      std::pair<int, std::vector<MemoryAccess *> *> *maPair = new std::pair<int, std::vector<MemoryAccess *> *>();
+      std::vector<MemoryAccess *> *list = new std::vector<MemoryAccess *>();
+      maPair->first = cur_line;
+      maPair->second = list;
+      // Start parsing the pet tree current line
+      // get the line with the following format:
+      // (number of blank spaces) type: (type of the statement)
+
+      // Shall not be the next stmt catching for "type"
+
+      i++;
+      while(1){
+        // Go to the line that contains "type"
+        for(i; i < pet_tree.size(); i++){
+            if(pet_tree[i][0] == '-')
+                goto end;
+            if(pet_tree[i].find("type") != std::string::npos){
+                break;
+            }
+        }
+        // Get the type of the statement
+        // For example: "    type: expression" -> "expression"
+        char type[20]; // Adjust size based on your needs
+        char expression[100]; // Adjust size based on your needs
+        char access[BUFFER_SIZE]; // Adjust size based on your needs
+
+        // Skip leading whitespace using "%*s"
+        sscanf(pet_tree[i].c_str(), "%*s%*[:]");
+
+        // Read "type:" and the expression
+        sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%s", type, expression);
+
+        // printf("type:%s at %d\n", type, i);
+        MemoryAccess *mem;
+        indexBound *ib;
+        isl_union_map *union_map;
+        auto str = pet_tree[i];
+        std::string::iterator colon_pos;
+        std::string s(type);
+        size_t start_pos;
+        size_t end_pos;
+        std::string extracted_part;
+        std::list<std::string> tokens;
+        mem = new MemoryAccess();
+        mem->indent = s.find("- type");
+        mem->lineno = i;
+        int is_read = 0;
+        int has_val = 0;
+        int bound_val = 0;
+
+        switch(hash_(expression)){
+          case  hash_compile_time( "access" ): 
+            // cout << "Access" << endl;
+            i++;
+            // get the union map of access, find the first pos of ':'
+            str = pet_tree[i];
+            start_pos = str.find("{");
+            end_pos = str.find("}");
+            extracted_part = str.substr(start_pos, end_pos - start_pos+1);
+            union_map = isl_union_map_read_from_str(ctx, extracted_part.c_str());
+            mem->access = union_map;
+            mem->arrarName = extractRefName(extracted_part);
+            /* extracted part like Sn[index] -> arr[ subscript ] */
+            start_pos = str.find(mem->arrarName);
+            end_pos = str.find("}", start_pos);
+            curr_stmt = extract_stmt_no_regex(extracted_part);
+            /* [] part */
+            extracted_part = str.substr(start_pos, end_pos - start_pos);
+            // std::cout << "extracted_part: " << extracted_part << std::endl;
+            tokens = split(extracted_part, ',', "[", "]");
+            for (auto nn : tokens) {
+              // remove head tail "(" and ")"
+              nn.erase(0, 1);
+              nn.erase(nn.size() - 1, 1);
+              ib = find_index_bound_from_stmt(dom, curr_stmt, nn);
+              if (!ib) continue;
+              // find item from unordered_map and push it to the var_n_val
+              for (auto p : var_n_val) {
+                // if p is a substring of ib->ub, then find it
+                if (ib->ub && std::string(ib->ub).find(p.first) != std::string::npos) {
+                  bound_val = p.second;
+                  has_val = 1;
                   break;
+                }
               }
-          }
+              if(has_val){
+                auto pair = new std::pair<const char *, int>(nn.c_str(), bound_val);
+                if (pair) map->at(mem->arrarName)->var_n_val->insert(pair);
+                std::cout << "nn: " << nn << " bound_val: " << bound_val << " on " << mem->arrarName << std::endl;
+              }
+            }
+            /* get the stmt no and the subscript */
+
+            i+=2;
+            str = pet_tree[i];
+            sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%d", type, &is_read);
+            mem->type = is_read ? READ : WRITE;
+            maPair->second->push_back(mem);
+            
+            break;
+          case  hash_compile_time( "double" ): 
+            // cout << "Double" << endl;
+            mem->type = CONSTANT;
+            i++;
+            sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%s", type, expression);
+            mem->arrarName = expression;
+            maPair->second->push_back(mem);
+            break;
+          default:
+            break;
+        }
+        // Move to next line
+        i++;
       }
-
-
-      if(found){
-          std::pair<int, std::vector<MemoryAccess *> *> *maPair = new std::pair<int, std::vector<MemoryAccess *> *>();
-          std::vector<MemoryAccess *> *list = new std::vector<MemoryAccess *>();
-          maPair->first = cur_line;
-          maPair->second = list;
-          // Start parsing the pet tree current line
-          // get the line with the following format:
-          // (number of blank spaces) type: (type of the statement)
-
-          // Shall not be the next stmt catching for "type"
-
-          i++;
-          while(1){
-              // Go to the line that contains "type"
-              for(i; i < pet_tree.size(); i++){
-                  if(pet_tree[i][0] == '-')
-                      goto end;
-                  if(pet_tree[i].find("type") != std::string::npos){
-                      break;
-                  }
-              }
-              // Get the type of the statement
-              // For example: "    type: expression" -> "expression"
-              char type[20]; // Adjust size based on your needs
-              char expression[100]; // Adjust size based on your needs
-              char access[BUFFER_SIZE]; // Adjust size based on your needs
-
-              // Skip leading whitespace using "%*s"
-              sscanf(pet_tree[i].c_str(), "%*s%*[:]");
-
-              // Read "type:" and the expression
-              sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%s", type, expression);
-
-              // printf("type:%s at %d\n", type, i);
-              MemoryAccess *mem;
-              isl_union_map *union_map;
-              auto str = pet_tree[i];
-              std::string::iterator colon_pos;
-              std::string s(type);
-              size_t start_pos;
-              size_t end_pos;
-              std::string extracted_part;
-              mem = new MemoryAccess();
-              mem->indent = s.find("- type");
-              mem->lineno = i;
-              int is_read = 0;
-
-              switch(hash_(expression)){
-                  case  hash_compile_time( "access" ): 
-                      // cout << "Access" << endl;
-                      i++;
-                      // get the union map of access, find the first pos of ':'
-                      str = pet_tree[i];
-                      start_pos = str.find("{");
-                      end_pos = str.find("}");
-                      extracted_part = str.substr(start_pos, end_pos - start_pos+1);
-                      // cout << "Access: " << extracted_part << endl;
-                      union_map = isl_union_map_read_from_str(ctx, extracted_part.c_str());
-                      mem->access = union_map;
-                      mem->arrarName = extractRefName(extracted_part);
-                      i+=2;
-                      str = pet_tree[i];
-                      sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%d", type, &is_read);
-                      mem->type = is_read ? READ : WRITE;
-                      maPair->second->push_back(mem);
-                      
-                      break;
-                  case  hash_compile_time( "double" ): 
-                      // cout << "Double" << endl;
-                      mem->type = CONSTANT;
-                      i++;
-                      sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%s", type, expression);
-                      mem->arrarName = expression;
-                      maPair->second->push_back(mem);
-                      break;
-                  default:
-                      break;
-              }
-              // Move to next line
-              i++;
-          }
 end:
-          found = 0;
-          // reverse the vector in pair->second
-          sort(maPair->second->begin(), maPair->second->end() , [](const MemoryAccess* a, const MemoryAccess* b) {
-              if (a->indent != b->indent){
-                  return a->indent > b->indent;
-              } else {
-                  return a->lineno > b->lineno;
-              }
-          });
-          mem_access->push_back(maPair);
-      }
+      found = 0;
+      // reverse the vector in pair->second
+      sort(maPair->second->begin(), maPair->second->end() , [](const MemoryAccess* a, const MemoryAccess* b) {
+          if (a->indent != b->indent){
+              return a->indent > b->indent;
+          } else {
+              return a->lineno > b->lineno;
+          }
+      });
+      mem_access->push_back(maPair);
+    }
   }
 
   pclose(pet_fp);
@@ -1211,23 +1298,21 @@ int main(int argc, char *argv[]) {
   domainSpace *dom = init_domainSpace();
   status = extract_dom_from_sched(file, dom);
   /* 
-   * int parse_dwarf_calc_bound(FILE *fp, domainSpace *dom, 
-   *                            std::vector<std::pair<const char *, int>> &var_n_val)
+   * int parse_dwarf_calc_bound(FILE *fp, domainSpace *dom)
    * 
    * For variable like N, which is the index bound var,
    * that we can know before the execution. 
    * Find the acutal value from dwarf, reparse the dwarf  
    */
   fp = popen(cmd, "r");
-  std::vector<std::pair<const char *, int>> var_n_val;
-  status = parse_dwarf_calc_bound(fp, dom, var_n_val);
+  status = parse_dwarf_calc_bound(fp, dom);
   #ifdef DEBUG  
   for (auto p : var_n_val) {
     std::cout << p.first << " : " << p.second << "| ";
   } std::cout << std::endl;
   #endif
   /* 
-   * int calc_dom_bound(domainSpace *dom, std::vector<std::pair<const char *, int>> var_n_val)
+   * int calc_dom_bound(domainSpace *dom)
    *
    * Use found vars to calculate the actual value of the variable
    * The ub_val and lb_val will bound the iteration space in such form:
@@ -1235,7 +1320,7 @@ int main(int argc, char *argv[]) {
    * if there is unknown value, e.g. bounded by parent band node, lb/ub_val = -1
    * We could only know it until the execution. 
    */
-  status = calc_dom_bound(dom, var_n_val);
+  status = calc_dom_bound(dom);
   #ifdef DEBUG
   for (int i = 0; i < dom->stmt_num; i++) {
     stmtSpace *stmt = dom->stmt[i];
@@ -1257,7 +1342,7 @@ int main(int argc, char *argv[]) {
   accessPerStmt *mem_access;
   mem_access = new accessPerStmt();
   dom->mem_access = mem_access;
-  status = get_access_relation_from_pet(mem_access, unit, compilation_unit);
+  status = get_access_relation_from_pet(dom, mem_access, unit, compilation_unit);
   std::cout << "mem_access size: " << mem_access->size() << std::endl;
   #ifdef DEBUG
   char *dump_str;
@@ -1291,7 +1376,6 @@ int main(int argc, char *argv[]) {
   while (tree->parent != NULL) {
     tree = tree->parent;
   }
-
   int trav = extTree_traverse(tree->children[0], 0);
 
   if (status == 1)
@@ -1326,8 +1410,8 @@ int main(int argc, char *argv[]) {
   }
   /*                  Extracttion                  */
 
-  /**********************************************/
-  /*                Call valgrind               */
+    /**********************************************/
+   /*                Call valgrind               */
   /**********************************************/
 
   // Fork a child process
