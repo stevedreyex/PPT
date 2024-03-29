@@ -853,6 +853,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
      */
     case isl_schedule_node_leaf:
       parent->children[parent->child_num] = current;
+      parent->child_num++;
       current->type = isl_schedule_node_leaf;
       // From accessPerStmt in domainSpace find the access of this stmt
       curr_stmt = 0;
@@ -1111,7 +1112,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
         mem = new MemoryAccess();
         mem->indent = s.find("- type");
         mem->lineno = i;
-        int is_read = 0;
+        int is_write = 0;
         int has_val = 0;
         int bound_val = 0;
 
@@ -1158,10 +1159,10 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
             }
             /* get the stmt no and the subscript */
 
-            i+=2;
+            i+=3;
             str = pet_tree[i];
-            sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%d", type, &is_read);
-            mem->type = is_read ? READ : WRITE;
+            sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%d", type, &is_write);
+            mem->type = is_write ? WRITE : READ;
             maPair->second->push_back(mem);
             
             break;
@@ -1171,6 +1172,8 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
             i++;
             sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%s", type, expression);
             mem->arrarName = expression;
+            // if it is a 0 then ignore
+            if (expression[0] == '0') break;
             maPair->second->push_back(mem);
             break;
           default:
@@ -1197,17 +1200,45 @@ end:
   return 1;
 }
 
+void dump_ib(indexBound *ib){
+  std::cout << "lb: " << ib->lb << ":" << ib->lb_val 
+                << " <= " << ib->index << " <="
+                << " ub: " << ib->ub << ":" << ib->ub_val << std::endl;
+}
+
+void dump_node_type_str(int n){
+  switch (n){
+    /*-1*/case isl_schedule_node_error: std::cout << "isl_schedule_node_error" << std::endl; break;
+    /* 0*/case isl_schedule_node_band: std::cout << "isl_schedule_node_band" << std::endl; break;
+    /* 1*/case isl_schedule_node_context: std::cout << "isl_schedule_node_context" << std::endl; break;
+    /* 2*/case isl_schedule_node_domain: std::cout << "isl_schedule_node_domain" << std::endl; break;
+    /* 3*/case isl_schedule_node_expansion: std::cout << "isl_schedule_node_expansion" << std::endl; break;
+    /* 4*/case isl_schedule_node_extension: std::cout << "isl_schedule_node_extension" << std::endl; break;
+    /* 5*/case isl_schedule_node_filter: std::cout << "isl_schedule_node_filter" << std::endl; break;
+    /* 6*/case isl_schedule_node_leaf: std::cout << "isl_schedule_node_leaf" << std::endl; break;
+    /* 7*/case isl_schedule_node_guard: std::cout << "isl_schedule_node_guard" << std::endl; break;
+    /* 8*/case isl_schedule_node_mark: std::cout << "isl_schedule_node_mark" << std::endl; break;
+    /* 9*/case isl_schedule_node_sequence: std::cout << "isl_schedule_node_sequence" << std::endl; break;
+    /*10*/case isl_schedule_node_set: std::cout << "isl_schedule_node_set" << std::endl; break;
+  }
+}
+
 /*
  * Dump of the tree, also the structure to represent
+ * TODO: Separate the dump and the traverse by provide print_fn to the traverse
  */
 int extTree_traverse(extTree *tree, int n){
   if(tree == NULL){
     return 0;
   }
   // Main content tree node
-  IDT(n) std::cout << "node type: " << tree->type << std::endl;
-  IDT(n) std::cout << "child_num: " << tree->child_num << std::endl;
-  IDT(n) std::cout << "curr_stmt: " << tree->curr_stmt << std::endl;
+  IDT(n) std::cout << "node type: " ;
+  dump_node_type_str(tree->type);
+  IDT(n) std::cout << "child_num: " << tree->child_num;
+  std::cout << "/ curr_stmt: " << tree->curr_stmt << std::endl;
+  if (tree->type == isl_schedule_node_band){
+    IDT(n) dump_ib(tree->ib);
+  }
 
   MemoryAccess *ar = NULL;
   for(int i = 0; i < tree->child_num; i++){
@@ -1215,8 +1246,15 @@ int extTree_traverse(extTree *tree, int n){
       extTree_traverse(tree->children[i], n+2);
     else {
       ar = tree->access_relations[i];
-      IDT(n) std::cout << ar->type << " " << ar->arrarName << " &";
-      IDT(n) isl_union_map_dump(ar->access);
+      // std::cout << ar->type << " " << ar->arrarName << " & ";
+      if (ar->type != CONSTANT){
+        char *str = isl_union_map_to_str(ar->access);
+        IDT(n) std::cout << str;
+        if (ar->type == READ) std::cout << " : read" << std::endl;
+        else std::cout << " : write" << std::endl;
+      } else {
+        IDT(n) std::cout << "Constant access: " << ar->arrarName << " : read" << std::endl;
+      }
     }
   }
   return 1;
@@ -1327,9 +1365,7 @@ int main(int argc, char *argv[]) {
     std::cout << "S" << stmt->stmt_no << std::endl;
     for (int j = 0; j < stmt->ib_num; j++) {
       indexBound *ib = stmt->ib[j];
-      std::cout << "lb: " << ib->lb << ":" << ib->lb_val 
-                << " <= " << ib->index << " <="
-                << " ub: " << ib->ub << ":" << ib->ub_val << std::endl;
+      dump_ib(ib);
     }
   }
   #endif
