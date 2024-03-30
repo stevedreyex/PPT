@@ -1032,6 +1032,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
   int checkpoint = i;
   ArrayRef *array;
   auto map = dom->array_refs;
+  std::unordered_map<std::string, int> established_map;
   for (int arr_i = arrays_start; arr_i < checkpoint; arr_i++){
     int pos = pet_tree[arr_i].find("extent");
     if (pos == std::string::npos) continue;
@@ -1044,6 +1045,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
     std::cout << "array_name: " << array_name << std::endl; 
     array = init_ArrayRef(array_name);
     map->insert(std::pair<std::string, ArrayRef *>(array_name, array));
+    established_map.insert(std::pair<std::string, int>(array_name, 0));
   }
   
   int found = 0;
@@ -1118,6 +1120,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
         mem = new MemoryAccess();
         mem->indent = s.find("- type");
         mem->lineno = i;
+        char *ib_name;
         int is_write = 0;
         int has_val = 0;
         int bound_val = 0;
@@ -1134,6 +1137,10 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
             union_map = isl_union_map_read_from_str(ctx, extracted_part.c_str());
             mem->access = union_map;
             mem->arrarName = extractRefName(extracted_part);
+            if (established_map.find(mem->arrarName) != established_map.end()){
+              if (established_map[mem->arrarName] == 1) goto already_established;
+              else established_map[mem->arrarName] = 1; // Not established before
+            } 
             /* extracted part like Sn[index] -> arr[ subscript ] */
             start_pos = str.find(mem->arrarName);
             end_pos = str.find("}", start_pos);
@@ -1146,25 +1153,29 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
               // remove head tail "(" and ")"
               nn.erase(0, 1);
               nn.erase(nn.size() - 1, 1);
+              std::cout << "nn: " << nn << std::endl;
               ib = find_index_bound_from_stmt(dom, curr_stmt, nn);
               if (!ib) continue;
               // find item from unordered_map and push it to the var_n_val
               for (auto p : var_n_val) {
                 // if p is a substring of ib->ub, then find it
                 if (ib->ub && std::string(ib->ub).find(p.first) != std::string::npos) {
+                  // std::cout << "ib->ub: " << ib->ub << " p.first: " << p.first << std::endl;
                   bound_val = p.second;
                   has_val = 1;
                   break;
                 }
               }
               if(has_val){
-                auto pair = new std::pair<const char *, int>(nn.c_str(), bound_val);
+                ib_name = (char *)(malloc(nn.length() + 1));
+                strcpy(ib_name, nn.c_str());
+                auto pair = new std::pair<const char *, int>(ib_name, bound_val);
                 if (pair) map->at(mem->arrarName)->var_n_val->insert(pair);
                 std::cout << "nn: " << nn << " bound_val: " << bound_val << " on " << mem->arrarName << std::endl;
               }
             }
             /* get the stmt no and the subscript */
-
+already_established:
             i+=3;
             str = pet_tree[i];
             sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%d", type, &is_write);
@@ -1292,7 +1303,8 @@ extTree *extTree_postorder_traverse(extTree *tree, int (*fn)(extTree *node, void
     return NULL;
   }
   for(int i = 0; i < tree->child_num; i++){
-    extTree_postorder_traverse(tree->children[i], fn, user, depth+1);
+    if (tree->type != isl_schedule_node_leaf)
+      extTree_postorder_traverse(tree->children[i], fn, user, depth+1);
   }
   if (fn(tree, user, depth)){
     return tree;
@@ -1329,6 +1341,28 @@ int print_node_content(extTree *node, void *user, int depth){
     return 0;
   }
   return 1;
+}
+
+extTree *calc_access_order(extTree *tree, void *user, int depth){
+  int **n_access = (int **)user;
+  if(tree == NULL){
+    return NULL;
+  }
+  if (tree->type == isl_schedule_node_leaf){
+    MemoryAccess *ar = NULL;
+    for (int i = 0; i < tree->child_num; i++){
+      ar = tree->access_relations[i];
+      if (ar->type != CONSTANT){
+        char *str = isl_union_map_to_str(ar->access);
+        std::cout << str;
+        if (ar->type == READ) std::cout << " : read" << std::endl;
+        else std::cout << " : write" << std::endl;
+      } else {
+        std::cout << "Constant access: " << ar->arrarName << " : read" << std::endl;
+      }
+    }
+  }
+  return tree;
 }
 
 /*
@@ -1489,7 +1523,14 @@ int main(int argc, char *argv[]) {
     tree = tree->parent;
   }
   int indent = 0;
-  int trav = extTree_preorder_traverse (tree->children[0], &print_node_content, &indent, 0);
+  // extTree *traverse =  extTree_postorder_traverse (tree->children[0], &print_node_content, &indent, 0);
+  // dump the unordered map array ref from the domainSpace
+  for (auto p : *dom->array_refs) {
+    std::cout << p.first << std::endl;
+    for (auto v : *p.second->var_n_val) {
+      std::cout << v->first << " : " << v->second << "| ";
+    } std::cout << std::endl;
+  }
 
   if (status == 1)
   {
