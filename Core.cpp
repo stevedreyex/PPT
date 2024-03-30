@@ -74,6 +74,12 @@ typedef struct{
   std::set<std::pair<const char *, int> *> *var_n_val;
   /* The start of array, for calculation, known till addr gen */
   unsigned long long int start_addr;
+  /* Use the array size to calculate the offset from start */
+  long long int offset;
+  /* When will this array reference first occur? Compute by band and num of accesses */
+  long long int first_occur;
+  /* What is the item of the first occurrence? */
+  isl_union_map *first_access;
 } ArrayRef;
 
 /* Struct for memory access                       */
@@ -1260,6 +1266,71 @@ int extTree_traverse(extTree *tree, int n){
   return 1;
 }
 
+/* Referenced from isl_schedule_foreach_schedule_node_top_down
+ * Visit the root node first, then the children
+ * Until there's no any children, stop
+ */
+int extTree_preorder_traverse(extTree *tree, int (*fn)(extTree *node, void *user, int depth), void *user, int depth){
+  if(tree == NULL){
+    return 0;
+  }
+  if (fn(tree, user, depth)){
+    for(int i = 0; i < tree->child_num; i++){
+      extTree_preorder_traverse(tree->children[i], fn, user, depth+1);
+    }
+  }
+  return 1;
+}
+
+/* Referenced from isl_schedule_map_schedule_node_bottom_up, also return node ptr
+ * It is the responsibility of the user to ensure that this does not
+ * lead to an infinite loop.  It is safest to always return a pointer
+ * to the same position (same ancestors and child positions) as the input node.
+ */
+extTree *extTree_postorder_traverse(extTree *tree, int (*fn)(extTree *node, void *user, int depth), void *user, int depth){
+  if(tree == NULL){
+    return NULL;
+  }
+  for(int i = 0; i < tree->child_num; i++){
+    extTree_postorder_traverse(tree->children[i], fn, user, depth+1);
+  }
+  if (fn(tree, user, depth)){
+    return tree;
+  }
+  return NULL;
+}
+
+/* From original extTree_traverse, print the content of the node 
+ * Callback function, the *user in this function is useless
+ */
+int print_node_content(extTree *node, void *user, int depth){
+  int n = depth * 2;
+  IDT(n) std::cout << "node type: " ;
+  dump_node_type_str(node->type);
+  IDT(n) std::cout << "child_num: " << node->child_num;
+  std::cout << "/ curr_stmt: " << node->curr_stmt << std::endl;
+  if (node->type == isl_schedule_node_band){
+    IDT(n) dump_ib(node->ib);
+  }
+  MemoryAccess *ar = NULL;
+  if (node->type == isl_schedule_node_leaf){
+    for (int i = 0; i < node->child_num; i++){
+      ar = node->access_relations[i];
+      // std::cout << ar->type << " " << ar->arrarName << " & ";
+      if (ar->type != CONSTANT){
+        char *str = isl_union_map_to_str(ar->access);
+        IDT(n) std::cout << str;
+        if (ar->type == READ) std::cout << " : read" << std::endl;
+        else std::cout << " : write" << std::endl;
+      } else {
+        IDT(n) std::cout << "Constant access: " << ar->arrarName << " : read" << std::endl;
+      }
+    }
+    return 0;
+  }
+  return 1;
+}
+
 /*
  * Program initialization
  * argv[1]: the path to the binary
@@ -1395,10 +1466,15 @@ int main(int argc, char *argv[]) {
   }
   #endif
   /* 
-   * int extTree_traverse(extTree *tree, int n)
-   *
-   * A coustomized tree structure extTree, similar to schedule tree
-   * Can be used for simulation
+   * int extTree_preorder_traverse(extTree *tree, int (*fn)(extTree *node, void *user, int depth), void *user, int depth)
+   * int print_node_content(extTree *node, void *user, int depth)
+   * 
+   * A callback function to traverse the tree, provide the depth additionally
+   * The print_node_content is a callback function to print the content of the node,
+   * which stop at leaf node. 
+   * 
+   * This indnet is useless actually ... ( The int indent = 0; )
+   * However for full functionality support we preserve it
    */ 
   file = fopen(ret, "r");
   extTree *tree = init_extTree(dom, NULL);
@@ -1412,13 +1488,19 @@ int main(int argc, char *argv[]) {
   while (tree->parent != NULL) {
     tree = tree->parent;
   }
-  int trav = extTree_traverse(tree->children[0], 0);
+  int indent = 0;
+  int trav = extTree_preorder_traverse (tree->children[0], &print_node_content, &indent, 0);
 
   if (status == 1)
   {
     printf("Error: Unable to extract domain from the schedule\n");
     return 1;
   }
+
+    /**********************************************/
+   /*          End of collecting data            */
+  /**********************************************/
+
   // Create data structure for collecting address
   /* Parse data may look like this: 
     ##### (after 5 #s)
