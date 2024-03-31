@@ -62,7 +62,10 @@ enum accessType{
 typedef enum isl_schedule_node_type isl_schedule_node_type;
 
 typedef struct{
-  /* Name of the array */
+  /* Name of the array 
+   * A little bit useless but we still preserver it 
+   * Since debug print it could provide infos
+   */
   char *name;
   /* 
    * Different with var_n_val<const char *, int> 
@@ -116,6 +119,8 @@ typedef struct  {
   int ib_num;
   /* the constraint part, the constraint for each stmt */
   indexBound** ib;
+  /* For finding the lexmin, the union set */
+  isl_union_set *iter_space;
 } stmtSpace;
 
 typedef struct {
@@ -129,13 +134,22 @@ typedef struct {
   stmtSpace **stmt;
   /* the [x, x, x, ...] -> { ... }, the x part, vars for inequality */
   char **variables;
-  /* For tree construction, take on the accessPerStmt */
-  /* Data is from pet tree */
+  /* For tree construction, take on the accessPerStmt 
+   * Data is from pet tree, stores all stmt_no pair and accesses (list) for each stmt, 
+   * a list of pair of (int and) list
+   */
   accessPerStmt *mem_access;
   /* All array structure member of the whole program */
   // ArrayRef **array_refs;
   std::unordered_map<std::string, ArrayRef *> *array_refs;
 } domainSpace;
+
+typedef struct {
+  /* The domain of the tree */
+  domainSpace *dom;
+  /* Which access is it now? */
+  std::stack<int> *curr_access;
+} dom_and_count;
 
 typedef struct extTree extTree;
 struct extTree {
@@ -217,7 +231,16 @@ ArrayRef *init_ArrayRef(std::string name) {
   strcpy(array->name, name.c_str());
   array->var_n_val = new std::set<std::pair<const char *, int> *>();
   array->start_addr = 0;
+  array->first_occur = 0;
+  array->first_access = NULL;
   return array;
+}
+
+dom_and_count *init_dom_and_count(domainSpace *dom) {
+  dom_and_count *dc = (dom_and_count *)(malloc(sizeof(dom_and_count)));
+  dc->dom = dom;
+  dc->curr_access = new std::stack<int>();
+  return dc;
 }
 
 /*
@@ -731,6 +754,15 @@ indexBound *find_index_bound_from_stmt(domainSpace *dom, int stmt_no, std::strin
   return NULL;
 }
 
+stmtSpace *find_stmt_from_domain(domainSpace *dom, int stmt_no) {
+  for (int i = 0; i < dom->stmt_num; i++) {
+    if (dom->stmt[i]->stmt_no == stmt_no) {
+      return dom->stmt[i];
+    }
+  }
+  return NULL;
+}
+
 int extract_stmt_no_regex(std::string str) {
   std::regex pattern("S(\\d+)");
   std::smatch match;
@@ -754,6 +786,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
   type = isl_schedule_node_get_type(node);
   isl_union_set *filter_temp;
   isl_union_map *band_temp;
+  stmtSpace *stmt;
   std::vector<MemoryAccess *> *cur_mem_access;
   std::string isl_obj_str;
   std::regex pattern("S(\\d+)");
@@ -838,7 +871,8 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       filter_temp = isl_schedule_node_filter_get_filter(node);
       isl_obj_str = isl_union_set_to_str(filter_temp);
       current->curr_stmt = extract_stmt_no_regex(isl_obj_str);
-
+      stmt = find_stmt_from_domain(current->dom, current->curr_stmt);
+      stmt->iter_space = isl_union_set_copy(filter_temp);
       // fetch stmt_no from the isl_obj_str
       // printf("stmt_no: %d\n", curr_stmt);
       isl_union_set_free(filter_temp);
@@ -1042,7 +1076,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
     std::string array_name = pet_tree[arr_i].substr(start_pos + 2, end_pos - start_pos - 2);
     // array_name find in ind_names then continue
     if (ind_names.find(array_name) != ind_names.end()) continue;
-    std::cout << "array_name: " << array_name << std::endl; 
+    // std::cout << "array_name: " << array_name << std::endl; 
     array = init_ArrayRef(array_name);
     map->insert(std::pair<std::string, ArrayRef *>(array_name, array));
     established_map.insert(std::pair<std::string, int>(array_name, 0));
@@ -1153,7 +1187,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
               // remove head tail "(" and ")"
               nn.erase(0, 1);
               nn.erase(nn.size() - 1, 1);
-              std::cout << "nn: " << nn << std::endl;
+              // std::cout << "nn: " << nn << std::endl;
               ib = find_index_bound_from_stmt(dom, curr_stmt, nn);
               if (!ib) continue;
               // find item from unordered_map and push it to the var_n_val
@@ -1171,7 +1205,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
                 strcpy(ib_name, nn.c_str());
                 auto pair = new std::pair<const char *, int>(ib_name, bound_val);
                 if (pair) map->at(mem->arrarName)->var_n_val->insert(pair);
-                std::cout << "nn: " << nn << " bound_val: " << bound_val << " on " << mem->arrarName << std::endl;
+                // std::cout << "nn: " << nn << " bound_val: " << bound_val << " on " << mem->arrarName << std::endl;
               }
             }
             /* get the stmt no and the subscript */
@@ -1190,8 +1224,11 @@ already_established:
             sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%s", type, expression);
             mem->arrarName = expression;
             // if it is a 0 then ignore
-            if (expression[0] == '0') break;
+            if (!strcmp(expression, "0")) break;
             maPair->second->push_back(mem);
+            // not really an array but a constant, still need the content
+            array = init_ArrayRef(expression);
+            map->insert(std::pair<std::string, ArrayRef *>(expression, array));
             break;
           default:
             break;
@@ -1298,7 +1335,7 @@ int extTree_preorder_traverse(extTree *tree, int (*fn)(extTree *node, void *user
  * lead to an infinite loop.  It is safest to always return a pointer
  * to the same position (same ancestors and child positions) as the input node.
  */
-extTree *extTree_postorder_traverse(extTree *tree, int (*fn)(extTree *node, void *user, int depth), void *user, int depth){
+extTree *extTree_postorder_traverse(extTree *tree, extTree * (*fn)(extTree *node, void *user, int depth), void *user, int depth){
   if(tree == NULL){
     return NULL;
   }
@@ -1344,23 +1381,63 @@ int print_node_content(extTree *node, void *user, int depth){
 }
 
 extTree *calc_access_order(extTree *tree, void *user, int depth){
-  int **n_access = (int **)user;
+  dom_and_count *dc = (dom_and_count *)user;
   if(tree == NULL){
     return NULL;
   }
-  if (tree->type == isl_schedule_node_leaf){
-    MemoryAccess *ar = NULL;
-    for (int i = 0; i < tree->child_num; i++){
-      ar = tree->access_relations[i];
-      if (ar->type != CONSTANT){
-        char *str = isl_union_map_to_str(ar->access);
-        std::cout << str;
-        if (ar->type == READ) std::cout << " : read" << std::endl;
-        else std::cout << " : write" << std::endl;
-      } else {
-        std::cout << "Constant access: " << ar->arrarName << " : read" << std::endl;
+  domainSpace *dom = dc->dom;
+  stmtSpace *stmt = NULL;
+  indexBound *ib = NULL;
+  isl_union_set *lexmin = NULL;
+  int iter_count = 0;
+  int val = 0;
+  switch (tree->type){
+    case isl_schedule_node_band:
+      val = tree->ib->ub_val - tree->ib->lb_val + 1;
+      std::cout << "BandVal: " << val << std::endl;
+      dc->curr_access->top() = dc->curr_access->top() * val;
+      break;
+    case isl_schedule_node_leaf:
+      dc->curr_access->push(0);
+      for (int i = 0; i < tree->child_num; i++){
+        MemoryAccess *ma = tree->access_relations[i];
+        // find the corresponding ArrayRef from the map
+        ArrayRef *ar = dom->array_refs->at(ma->arrarName);
+        if (ma->type != CONSTANT && ar->first_access == NULL){
+          ar->first_access = isl_union_map_copy(ma->access);
+          // let me see the first access ??
+          char *str = isl_union_map_to_str(ar->first_access);
+          ar->first_occur = dc->curr_access->top();
+          std::cout << "Array " << ma->arrarName << " first access at:  " << ar->first_occur << std::endl;
+          stmt = find_stmt_from_domain(dom, tree->curr_stmt);
+          lexmin = isl_union_set_lexmin(isl_union_set_copy(stmt->iter_space));
+          // Will get sth like this: 
+          // [tsteps, n] -> { S2[t, i, j] : t = 0 and i = 1 and j = 1 and tsteps > 0 and n >= 3 }
+        } else if (ma->type == CONSTANT && ar->first_occur == 0) {
+          ar->first_occur = dc->curr_access->top();
+          std::cout << "Constant " << ma->arrarName << " first access at:  " << ar->first_occur << std::endl;
+        }
+        dc->curr_access->top() = dc->curr_access->top() + 1;
       }
-    }
+      break;
+    // case isl_schedule_node_filter:
+    //   break;
+    case isl_schedule_node_sequence:
+      val = 0;
+      iter_count = dc->curr_access->size();
+      std::cout << "SequenceVal: " << dc->curr_access->size() << std::endl;
+      for (int i = 0; i < iter_count; i++){
+        std::cout << "Val: " << dc->curr_access->top() << std::endl;
+        val += dc->curr_access->top();
+        dc->curr_access->pop();
+      }
+      dc->curr_access->push(val);
+      break;
+    case isl_schedule_node_domain:
+      std::cout << "Now val is: " << dc->curr_access->top() << std::endl;
+      break;
+    default:
+      break;
   }
   return tree;
 }
@@ -1498,18 +1575,19 @@ int main(int argc, char *argv[]) {
           }
       }
   }
+
+  std::cout << "ArrayRefs: " << std::endl;
+  for (auto v : *dom->array_refs){
+    std::cout << v.first << std::endl;
+  }
   #endif
   /* 
-   * int extTree_preorder_traverse(extTree *tree, int (*fn)(extTree *node, void *user, int depth), void *user, int depth)
-   * int print_node_content(extTree *node, void *user, int depth)
-   * 
-   * A callback function to traverse the tree, provide the depth additionally
-   * The print_node_content is a callback function to print the content of the node,
-   * which stop at leaf node. 
-   * 
-   * This indnet is useless actually ... ( The int indent = 0; )
-   * However for full functionality support we preserve it
-   */ 
+   * int construction(isl_schedule_node *node, void *user)
+   *
+   * Construct the tree structure from the schedule tree
+   * The tree structure is used to store the schedule tree
+   * and the access relation of each statement
+   */
   file = fopen(ret, "r");
   extTree *tree = init_extTree(dom, NULL);
   tree->child_num = 0;
@@ -1522,15 +1600,22 @@ int main(int argc, char *argv[]) {
   while (tree->parent != NULL) {
     tree = tree->parent;
   }
+  /* 
+   * int extTree_preorder_traverse(extTree *tree, int (*fn)(extTree *node, void *user, int depth), void *user, int depth)
+   * int print_node_content(extTree *node, void *user, int depth)
+   * 
+   * A callback function to traverse the tree, provide the depth additionally
+   * The print_node_content is a callback function to print the content of the node,
+   * which stop at leaf node. 
+   * 
+   * This indnet is useless actually ... ( The int indent = 0; )
+   * However for full functionality support we preserve it
+   */ 
   int indent = 0;
-  // extTree *traverse =  extTree_postorder_traverse (tree->children[0], &print_node_content, &indent, 0);
+  dom_and_count *user= init_dom_and_count(dom);
+  extTree *traverse =  extTree_postorder_traverse (tree->children[0], &calc_access_order, user, 0);
+  // extTree_preorder_traverse (tree, &print_node_content, &user, 0);
   // dump the unordered map array ref from the domainSpace
-  for (auto p : *dom->array_refs) {
-    std::cout << p.first << std::endl;
-    for (auto v : *p.second->var_n_val) {
-      std::cout << v->first << " : " << v->second << "| ";
-    } std::cout << std::endl;
-  }
 
   if (status == 1)
   {
