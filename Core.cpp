@@ -74,7 +74,7 @@ typedef struct{
    * It is not like the iteration space
    * An array always have its start address from 0
    */
-  std::set<std::pair<const char *, int> *> *var_n_val;
+  std::vector<std::pair<const char *, int> *> *var_n_val;
   /* The start of array, for calculation, known till addr gen */
   unsigned long long int start_addr;
   /* Use the array size to calculate the offset from start */
@@ -229,7 +229,7 @@ ArrayRef *init_ArrayRef(std::string name) {
   ArrayRef *array = (ArrayRef *)(malloc(sizeof(ArrayRef)));
   array->name = (char *)(malloc(name.length() + 1));
   strcpy(array->name, name.c_str());
-  array->var_n_val = new std::set<std::pair<const char *, int> *>();
+  array->var_n_val = new std::vector<std::pair<const char *, int> *>();
   array->start_addr = 0;
   array->first_occur = 0;
   array->first_access = NULL;
@@ -741,6 +741,53 @@ int calc_dom_bound(domainSpace *dom) {
   return 1;
 }
 
+int calc_offset_const_val(indexBound *ib, MemoryAccess *access) {
+  int lexmin = ib->lb_val;
+  int start_pos = 0;
+  long int temp_val = 0;
+  long int val = 0;
+  char *endptr;
+  std::string access_str = isl_union_map_to_str(access->access);
+  start_pos = access_str.find("[");
+  start_pos = access_str.find("[", start_pos + 1);
+  std::list<std::string> tokens;
+  std::vector<std::string> items;
+  std::string *parse_arget;
+  std::string token;
+  size_t pos = 0;
+  tokens = split(access_str.substr(start_pos, access_str.length() - start_pos), ',', "[", "]");
+  for (auto t : tokens){
+    if (t.find(ib->index) != std::string::npos) {
+      parse_arget = new std::string(t);
+      while ((pos = parse_arget->find(" ")) != std::string::npos) {
+        token = parse_arget->substr(0, pos);
+        items.push_back(token);
+        parse_arget->erase(0, pos + 1);
+      }
+      items.push_back(*parse_arget);
+      for (auto it : items) {
+        // temp_val = atoi(it->c_str());
+        temp_val = strtol ( it.c_str() , &endptr , 10 ) ;
+        if (*endptr != '\0') {
+          // Two cases: operator or number
+          // Operator
+          if (!strcmp(it.c_str(), "+") || !strcmp(it.c_str(), "-")
+              || !strcmp(it.c_str(), "*") || !strcmp(it.c_str(), "/")) {
+            continue;
+          } else {
+            // Might have subsitution
+            val += ib->lb_val;
+          }
+        } else {
+          val += temp_val;
+        }
+        temp_val = 0;
+      }
+    }
+  }
+  return val;
+}
+
 indexBound *find_index_bound_from_stmt(domainSpace *dom, int stmt_no, std::string index) {
   for (int i = 0; i < dom->stmt_num; i++) {
     if (dom->stmt[i]->stmt_no == stmt_no) {
@@ -872,7 +919,8 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       isl_obj_str = isl_union_set_to_str(filter_temp);
       current->curr_stmt = extract_stmt_no_regex(isl_obj_str);
       stmt = find_stmt_from_domain(current->dom, current->curr_stmt);
-      stmt->iter_space = isl_union_set_copy(filter_temp);
+      // stmt->iter_space = isl_union_set_copy(filter_temp);
+
       // fetch stmt_no from the isl_obj_str
       // printf("stmt_no: %d\n", curr_stmt);
       isl_union_set_free(filter_temp);
@@ -1204,7 +1252,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
                 ib_name = (char *)(malloc(nn.length() + 1));
                 strcpy(ib_name, nn.c_str());
                 auto pair = new std::pair<const char *, int>(ib_name, bound_val);
-                if (pair) map->at(mem->arrarName)->var_n_val->insert(pair);
+                if (pair) map->at(mem->arrarName)->var_n_val->push_back(pair);
                 // std::cout << "nn: " << nn << " bound_val: " << bound_val << " on " << mem->arrarName << std::endl;
               }
             }
@@ -1389,12 +1437,14 @@ extTree *calc_access_order(extTree *tree, void *user, int depth){
   stmtSpace *stmt = NULL;
   indexBound *ib = NULL;
   isl_union_set *lexmin = NULL;
+  char *str = NULL;
   int iter_count = 0;
+  int pos_count;
+  int found = 0;
   int val = 0;
   switch (tree->type){
     case isl_schedule_node_band:
       val = tree->ib->ub_val - tree->ib->lb_val + 1;
-      std::cout << "BandVal: " << val << std::endl;
       dc->curr_access->top() = dc->curr_access->top() * val;
       break;
     case isl_schedule_node_leaf:
@@ -1406,13 +1456,21 @@ extTree *calc_access_order(extTree *tree, void *user, int depth){
         if (ma->type != CONSTANT && ar->first_access == NULL){
           ar->first_access = isl_union_map_copy(ma->access);
           // let me see the first access ??
-          char *str = isl_union_map_to_str(ar->first_access);
           ar->first_occur = dc->curr_access->top();
-          std::cout << "Array " << ma->arrarName << " first access at:  " << ar->first_occur << std::endl;
           stmt = find_stmt_from_domain(dom, tree->curr_stmt);
-          lexmin = isl_union_set_lexmin(isl_union_set_copy(stmt->iter_space));
-          // Will get sth like this: 
-          // [tsteps, n] -> { S2[t, i, j] : t = 0 and i = 1 and j = 1 and tsteps > 0 and n >= 3 }
+          int j = 0;
+          for (j; j < stmt->ib_num; j++){
+            if (!strcmp(ar->var_n_val->at(0)->first, stmt->ib[j]->index)){
+              break;
+            }
+          }
+          // Next pos to match first array index
+          for (j; j < ar->var_n_val->size(); j++){
+            ar->offset += calc_offset_const_val(stmt->ib[j], ma) * ar->var_n_val->at(j-1)->second;
+          }
+          // j will add 1 then compare, so just access j not j+1
+          ar->offset += calc_offset_const_val(stmt->ib[j], ma);
+          std::cout << "Array " << ma->arrarName << " offset:  " << ar->offset << std::endl;
         } else if (ma->type == CONSTANT && ar->first_occur == 0) {
           ar->first_occur = dc->curr_access->top();
           std::cout << "Constant " << ma->arrarName << " first access at:  " << ar->first_occur << std::endl;
@@ -1425,16 +1483,14 @@ extTree *calc_access_order(extTree *tree, void *user, int depth){
     case isl_schedule_node_sequence:
       val = 0;
       iter_count = dc->curr_access->size();
-      std::cout << "SequenceVal: " << dc->curr_access->size() << std::endl;
       for (int i = 0; i < iter_count; i++){
-        std::cout << "Val: " << dc->curr_access->top() << std::endl;
         val += dc->curr_access->top();
         dc->curr_access->pop();
       }
       dc->curr_access->push(val);
       break;
     case isl_schedule_node_domain:
-      std::cout << "Now val is: " << dc->curr_access->top() << std::endl;
+      // std::cout << "Now val is: " << dc->curr_access->top() << std::endl;
       break;
     default:
       break;
@@ -1579,6 +1635,9 @@ int main(int argc, char *argv[]) {
   std::cout << "ArrayRefs: " << std::endl;
   for (auto v : *dom->array_refs){
     std::cout << v.first << std::endl;
+    for (auto p : *v.second->var_n_val){
+      std::cout << p->first << " : " << p->second << "| ";
+    } std::cout << std::endl;
   }
   #endif
   /* 
