@@ -1490,7 +1490,7 @@ extTree *calc_access_order(extTree *tree, void *user, int depth){
       dc->curr_access->push(val);
       break;
     case isl_schedule_node_domain:
-      // std::cout << "Now val is: " << dc->curr_access->top() << std::endl;
+      std::cout << "Now val is: " << dc->curr_access->top() << std::endl;
       break;
     default:
       break;
@@ -1676,32 +1676,23 @@ int main(int argc, char *argv[]) {
   // extTree_preorder_traverse (tree, &print_node_content, &user, 0);
   // dump the unordered map array ref from the domainSpace
 
-  if (status == 1)
-  {
-    printf("Error: Unable to extract domain from the schedule\n");
-    return 1;
-  }
 
+  std::vector<ArrayRef *> *access_order = new std::vector<ArrayRef *>();
+  for (auto p : *dom->array_refs){
+    access_order->push_back(p.second);
+  }
+  // sort by first_occur in ArrayRef
+  std::sort(access_order->begin(), access_order->end(), [](ArrayRef *a, ArrayRef *b) {return a->first_occur < b->first_occur;} );
+
+  // if (status == 1)
+  // {
+  //   printf("Error: Unable to extract domain from the schedule\n");
+  //   return 1;
+  // }
     /**********************************************/
    /*          End of collecting data            */
   /**********************************************/
 
-  // Create data structure for collecting address
-  /* Parse data may look like this: 
-    ##### (after 5 #s)
-    read: [tsteps, n, b0, b1] -> { S1[t, i, j] -> A[i, j] }
-    read: [tsteps, n, b0, b1] -> { S1[t, i, j] -> A[i, -1 + j] }
-    read: [tsteps, n, b0, b1] -> { S1[t, i, j] -> A[i, 1 + j] }
-    read: [tsteps, n, b0, b1] -> { S1[t, i, j] -> A[1 + i, j] }
-    read: [tsteps, n, b0, b1] -> { S1[t, i, j] -> A[-1 + i, j] }
-    write: [tsteps, n, b0, b1] -> { S1[t, i, j] -> B[i, j] }
-    write: [tsteps, n, b0, b1] -> { S2[t, i, j] -> A[i, j] }
-    read: [tsteps, n, b0, b1] -> { S2[t, i, j] -> B[i, j] }
-    read: [tsteps, n, b0, b1] -> { S2[t, i, j] -> B[i, -1 + j] }
-    read: [tsteps, n, b0, b1] -> { S2[t, i, j] -> B[i, 1 + j] }
-    read: [tsteps, n, b0, b1] -> { S2[t, i, j] -> B[1 + i, j] }
-    read: [tsteps, n, b0, b1] -> { S2[t, i, j] -> B[-1 + i, j] }
-  */
   int stmt = 1;
   // Read from the file after ##### occurs
   
@@ -1776,11 +1767,13 @@ int main(int argc, char *argv[]) {
       cache_index += bytes_read;
 
       // Check if there is a complete line in the cache
+      long long unsigned int n = 0;
+      long long unsigned int skip = 0x1ffeff0000;
       char *line_start = cache;
       char *line_end;
       char access;
-      int line_no, size;
-      long long int addr;
+      int line_no, size, first_access_index = 0;
+      unsigned long long int addr;
       /*
        * Recording the address, add thme into polyhedral model
        * Why we still need to record? 
@@ -1794,12 +1787,20 @@ int main(int argc, char *argv[]) {
         // Check if the line starts with '%'
         if (line_start[0] == '*') {
           // Output the line
-          // printf("detected at %s\n", line_start);
-          sscanf(line_start, "**%*d** %c %d %llx %d", &access, &line_no, &addr, &size);
+          sscanf(line_start, "**%*d** & %c %d %llx %d", &access, &line_no, &addr, &size);
+          // printf("Access: %c, Line No: %d, Address: 0x%.10llx, Size: %d\n", access, line_no, addr, size);
+          if (!addr || addr >= skip){
+            std::cout << "is skip" << std::endl; 
+            line_start = line_end + 1;
+            continue;
+          }
 
           // Output parsed values
-          // printf("Access: %c, Line No: %d, Address: 0x%.10llx, Size: %d\n", access, line_no, addr, size);
-    
+          if (first_access_index < access_order->size() && counter == access_order->at(first_access_index)->first_occur){
+            access_order->at(first_access_index)->start_addr = addr - access_order->at(first_access_index)->offset * size;
+            printf("Array: %s, First Occur: %d, Start Address: 0x%.10llx\n", access_order->at(first_access_index)->name, access_order->at(first_access_index)->first_occur, access_order->at(first_access_index)->start_addr);
+            first_access_index++;
+          }
           counter++;
         }
 
@@ -1819,6 +1820,7 @@ int main(int argc, char *argv[]) {
       cache_index = remaining_bytes;
     }
     printf("There are %d line of output to here\n", counter);
+    // Dump the access_order
 
     // Close the read end of the pipe
     close(pipe_fd[0]);
@@ -1827,15 +1829,29 @@ int main(int argc, char *argv[]) {
     int status;
     waitpid(pid, &status, 0);
   }
-
+  // free ArrayRef->union_map
+  for (auto p : *access_order){
+    isl_union_map_free(p->first_access);
+  }
   // Free the array of ptr
   for (int i = 0; i < compilation_unit; i++) {
     free(unit[i]);
   }
+  // Free MemoryAccess->union_map
+  for (auto v : *dom->mem_access) {
+    for (auto q : *v->second) {
+      if (q->type != CONSTANT) isl_union_map_free(q->access);
+    }
+  }
+  // Free dom->stmt->union_set
+  for (int i = 0; i < dom->stmt_num; i++) {
+    isl_union_set_free(dom->stmt[i]->iter_space);
+  }
   free(unit);
 	fclose(file);
   isl_schedule_free(schedule);
-  isl_ctx_free(ctx);
+  // Fine...I dunno which item still reference it
+  // isl_ctx_free(ctx);
   free(ret);
   return 0;
 }
