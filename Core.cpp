@@ -1442,6 +1442,7 @@ extTree *calc_access_order(extTree *tree, void *user, int depth){
   int pos_count;
   int found = 0;
   int val = 0;
+  int ar_ind =  0;
   switch (tree->type){
     case isl_schedule_node_band:
       val = tree->ib->ub_val - tree->ib->lb_val + 1;
@@ -1459,16 +1460,26 @@ extTree *calc_access_order(extTree *tree, void *user, int depth){
           ar->first_occur = dc->curr_access->top();
           stmt = find_stmt_from_domain(dom, tree->curr_stmt);
           int j = 0;
+          ar_ind = 0;
+          if (ar->var_n_val->size() == 0){
+            ar->offset = 0;
+            continue;
+          }
+          // Find the statement constraint lower bound index and value
           for (j; j < stmt->ib_num; j++){
-            if (!strcmp(ar->var_n_val->at(0)->first, stmt->ib[j]->index)){
+            // std::cout << " stmt->ib[j]->index: " << stmt->ib[j]->index << std::endl;
+            if (ar->var_n_val->size() && !strcmp(ar->var_n_val->at(ar_ind)->first, stmt->ib[j]->index)){
               break;
             }
           }
           // Next pos to match first array index
-          for (j; j < ar->var_n_val->size(); j++){
-            ar->offset += calc_offset_const_val(stmt->ib[j], ma) * ar->var_n_val->at(j-1)->second;
+          for (j; j < ar->var_n_val->size() && j < (stmt->ib_num - 1); j++){
+            std::cout << "At: " << ar->name << " Size of var_n_val:" << ar->var_n_val->size() << " current j: " << j << std::endl;
+            ar->offset += calc_offset_const_val(stmt->ib[j], ma) * ar->var_n_val->at(ar_ind)->second;
+            ar_ind++;
           }
           // j will add 1 then compare, so just access j not j+1
+          // Sometime will not find any matching j for stmt->ib[j]
           ar->offset += calc_offset_const_val(stmt->ib[j], ma);
           std::cout << "Array " << ma->arrarName << " offset:  " << ar->offset << std::endl;
         } else if (ma->type == CONSTANT && ar->first_occur == 0) {
@@ -1790,7 +1801,7 @@ int main(int argc, char *argv[]) {
           sscanf(line_start, "**%*d** & %c %d %llx %d", &access, &line_no, &addr, &size);
           // printf("Access: %c, Line No: %d, Address: 0x%.10llx, Size: %d\n", access, line_no, addr, size);
           if (!addr || addr >= skip){
-            std::cout << "is skip" << std::endl; 
+            // std::cout << "is skip" << std::endl; 
             line_start = line_end + 1;
             continue;
           }
@@ -1821,6 +1832,9 @@ int main(int argc, char *argv[]) {
     }
     printf("There are %d line of output to here\n", counter);
     // Dump the access_order
+    for (auto p : *access_order){
+      std::cout << "Array: " << p->name << " First Occur: " << p->first_occur << " Start Address: 0x" << std::hex << p->start_addr << std::dec << std::endl;
+    }
 
     // Close the read end of the pipe
     close(pipe_fd[0]);
