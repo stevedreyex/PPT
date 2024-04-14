@@ -5,6 +5,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <regex>
+#include <math.h>
 
 #include <isl/arg.h>
 #include <isl/ctx.h>
@@ -23,6 +24,7 @@
         return -1; \
     }
 #define BUFFER_SIZE 1024 // Increased buffer size
+#define ARR_ELEM_SIZE 4
 
 #define IDT(n) for (int i = 0; i < n; i++) printf(" ");
 
@@ -33,8 +35,37 @@ std::vector<std::pair<const char *, int>> var_n_val;
 std::unordered_map<std::string, int> sim_index_map;
 
 typedef std::uint64_t hash_t;
+typedef unsigned long long int ULong;
+typedef unsigned long Addr;
 constexpr hash_t prime = 0x100000001B3ull;  
 constexpr hash_t basis = 0xCBF29CE484222325ull;  
+
+// For cache simulation
+typedef struct {
+   int size;       // bytes
+   int assoc;
+   int line_size;  // bytes
+} cache_t;
+
+typedef struct {
+   int          size;                   /* bytes */
+   int          assoc;
+   int          line_size;              /* bytes */
+   int          sets;
+   int          sets_min_1;
+   int          line_size_bits;
+   int          tag_shift;
+   char        desc_line[128];         /* large enough */
+   unsigned long*       tags;
+} cache_t2;
+
+static cache_t2 LL;
+static cache_t2 I1;
+static cache_t2 D1;
+
+ULong D1mr = 0, DLmr = 0;
+ULong D1mw = 0, DLmw = 0;
+ULong Dr = 0, Dw = 0;
   
 hash_t hash_( char const * str)   
 {  
@@ -240,6 +271,134 @@ dom_and_count *init_dom_and_count(domainSpace *dom) {
   dc->dom = dom;
   dc->curr_access = new std::stack<int>();
   return dc;
+}
+
+/* By this point, the size/assoc/line_size has been checked. */
+static void cachesim_initcache(cache_t config, cache_t2* c)
+{
+   int i;
+
+   c->size      = config.size;
+   c->assoc     = config.assoc;
+   c->line_size = config.line_size;
+
+   c->sets           = (c->size / c->line_size) / c->assoc;
+   c->sets_min_1     = c->sets - 1;
+   c->line_size_bits = log2(c->line_size);
+   c->tag_shift      = c->line_size_bits + log2(c->sets);
+
+   if (c->assoc == 1) {
+      printf(c->desc_line, "%d B, %d B, direct-mapped", 
+                                 c->size, c->line_size);
+   } else {
+      printf(c->desc_line, "%d B, %d B, %d-way associative",
+                                 c->size, c->line_size, c->assoc);
+   }
+
+   c->tags = (unsigned long *)malloc(sizeof(unsigned long) * c->sets * c->assoc);
+
+   for (i = 0; i < c->sets * c->assoc; i++)
+      c->tags[i] = 0;
+}
+
+/* This attribute forces GCC to inline the function, getting rid of a
+ * lot of indirection around the cache_t2 pointer, if it is known to be
+ * constant in the caller (the caller is inlined itself).
+ * Without inlining of simulator functions, cachegrind can get 40% slower.
+ */
+__attribute__((always_inline))
+static __inline__
+bool cachesim_setref_is_miss(cache_t2* c, unsigned int set_no, unsigned long tag)
+{
+   int i, j;
+   unsigned long *set;
+
+   set = &(c->tags[set_no * c->assoc]);
+
+   /* This loop is unrolled for just the first case, which is the most */
+   /* common.  We can't unroll any further because it would screw up   */
+   /* if we have a direct-mapped (1-way) cache.                        */
+   if (tag == set[0])
+      return false;
+
+   /* If the tag is one other than the MRU, move it into the MRU spot  */
+   /* and shuffle the rest down.                                       */
+   for (i = 1; i < c->assoc; i++) {
+      if (tag == set[i]) {
+         for (j = i; j > 0; j--) {
+            set[j] = set[j - 1];
+         }
+         set[0] = tag;
+
+         return false;
+      }
+   }
+
+   /* A miss;  install this tag as MRU, shuffle rest down. */
+   for (j = c->assoc - 1; j > 0; j--) {
+      set[j] = set[j - 1];
+   }
+   set[0] = tag;
+
+   return true;
+}
+
+__attribute__((always_inline))
+static __inline__
+bool cachesim_ref_is_miss(cache_t2* c, Addr a, char size)
+{
+   /* A memory block has the size of a cache line */
+   unsigned long block1 =  a         >> c->line_size_bits;
+   unsigned long block2 = (a+size-1) >> c->line_size_bits;
+   unsigned int  set1   = block1 & c->sets_min_1;
+
+   /* Tags used in real caches are minimal to save space.
+    * As the last bits of the block number of addresses mapping
+    * into one cache set are the same, real caches use as tag
+    *   tag = block >> log2(#sets)
+    * But using the memory block as more specific tag is fine,
+    * and saves instructions.
+    */
+   unsigned long tag1   = block1;
+
+   /* Access entirely within line. */
+   if (block1 == block2)
+      return cachesim_setref_is_miss(c, set1, tag1);
+
+   /* Access straddles two lines. */
+   else if (block1 + 1 == block2) {
+      unsigned int  set2 = block2 & c->sets_min_1;
+      unsigned long tag2 = block2;
+
+      /* always do both, as state is updated as side effect */
+      if (cachesim_setref_is_miss(c, set1, tag1)) {
+         cachesim_setref_is_miss(c, set2, tag2);
+         return true;
+      }
+      return cachesim_setref_is_miss(c, set2, tag2);
+   }
+   printf("addr: %lx  size: %u  blocks: %lu %lu",
+               a, size, block1, block2);
+   printf("item straddles more than two cache sets");
+   /* not reached */
+   return true;
+}
+
+static void cachesim_initcaches(cache_t D1c, cache_t LLc)
+{
+   cachesim_initcache(D1c, &D1);
+   cachesim_initcache(LLc, &LL);
+}
+
+__attribute__((always_inline))
+static __inline__
+void cachesim_D1_doref(Addr a, char size, ULong* m1, ULong *mL)
+{
+   if (cachesim_ref_is_miss(&D1, a, size)) {
+      (*m1)++;
+      if (cachesim_ref_is_miss(&LL, a, size))
+         (*mL)++;
+   }
 }
 
 /*
@@ -1478,13 +1637,23 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
     case isl_schedule_node_leaf:
       // Phase generate the address
       for (int i = 0; i < tree->child_num; i++){
-        if (tree->access_relations[i]->type != CONSTANT) {
-          addr = dom->array_refs->at(tree->access_relations[i]->arrarName)->start_addr
-                + 4 * calc_offset_const_val(tree->access_relations[i], tree->dom->array_refs->at(tree->access_relations[i]->arrarName));
+        MemoryAccess *ar = tree->access_relations[i];
+        if (ar->type != CONSTANT) {
+          addr = dom->array_refs->at(ar->arrarName)->start_addr
+                + 4 * calc_offset_const_val(ar, tree->dom->array_refs->at(ar->arrarName));
+          if (ar->type == WRITE){
+            Dw++;
+            cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1mw, &DLmw);
+          } else {
+            Dr++;
+            cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1mr, &DLmr);
+          }
           // printf("ArrayRef addr: 0x%.10llx\n", addr);
         } else {
           // Constant access
           addr = 0x000010a00c;
+          Dr++;
+          cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1mr, &DLmr);
           // printf("Constant addr: 0x%.12llx\n", addr);
         }
       }
@@ -1676,12 +1845,20 @@ int main(int argc, char *argv[]) {
    /*              Sim phase Start               */
   /**********************************************/
 
+  if (status == 1) {
+    printf("Error: get_access_relation_from_pet failed\n");
+    return 1;
+  }
+
+  cache_t  D1c, LLc;
+  D1c = (cache_t) { 32768, 8, 64 };
+  LLc = (cache_t) { 2097152, 16, 64 };
+  cachesim_initcaches(D1c, LLc);
   status = gen_and_sim_addr(tree, dom);
 
-  if (status == 1) {
-    printf("Error, terminated\n");
-    exit(1);
-  }
+  printf("Dr: %llu, D1mr: %llu, DLmr: %llu\n", Dr, D1mr, DLmr);
+  printf("Dw: %llu, D1mw: %llu, DLmw: %llu\n", Dw, D1mw, DLmw);
+
   // Free the array of ptr
   for (int i = 0; i < compilation_unit; i++) {
     free(unit[i]);
