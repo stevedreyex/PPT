@@ -30,6 +30,7 @@ char *sim_prog_path;  // argv[1]
 char *exe_prog_path;  // argv[2]
 char *pet_prog_args;  // argv[3]
 std::vector<std::pair<const char *, int>> var_n_val;
+std::unordered_map<std::string, int> sim_index_map;
 
 typedef std::uint64_t hash_t;
 constexpr hash_t prime = 0x100000001B3ull;  
@@ -173,8 +174,6 @@ struct extTree {
   indexBound *ib;
   /* For sim phase, should recalc everytime the execution time */
   int execution_time;
-  /* For sim phase, which time already executed? */
-  int curr_exec_time;
 } ;
 
 /* The initializer starts */
@@ -741,8 +740,7 @@ int calc_dom_bound(domainSpace *dom) {
   return 1;
 }
 
-int calc_offset_const_val(indexBound *ib, MemoryAccess *access) {
-  int lexmin = ib->lb_val;
+int calc_offset_const_val(MemoryAccess *access, ArrayRef *ar) {
   int start_pos = 0;
   long int temp_val = 0;
   long int val = 0;
@@ -755,37 +753,40 @@ int calc_offset_const_val(indexBound *ib, MemoryAccess *access) {
   std::string *parse_arget;
   std::string token;
   size_t pos = 0;
+  int size_dim = 1;
+  // Already in the array access
   tokens = split(access_str.substr(start_pos, access_str.length() - start_pos), ',', "[", "]");
   for (auto t : tokens){
-    if (t.find(ib->index) != std::string::npos) {
-      parse_arget = new std::string(t);
-      while ((pos = parse_arget->find(" ")) != std::string::npos) {
-        token = parse_arget->substr(0, pos);
-        items.push_back(token);
-        parse_arget->erase(0, pos + 1);
-      }
-      items.push_back(*parse_arget);
-      for (auto it : items) {
-        // temp_val = atoi(it->c_str());
-        temp_val = strtol ( it.c_str() , &endptr , 10 ) ;
-        if (*endptr != '\0') {
-          // Two cases: operator or number
-          // Operator
-          if (!strcmp(it.c_str(), "+") || !strcmp(it.c_str(), "-")
-              || !strcmp(it.c_str(), "*") || !strcmp(it.c_str(), "/")) {
-            continue;
-          } else {
-            // Might have subsitution
-            val += ib->lb_val;
-          }
-        } else {
-          val += temp_val;
-        }
-        temp_val = 0;
-      }
+    items.clear();
+    parse_arget = new std::string(t);
+    while ((pos = parse_arget->find(" ")) != std::string::npos) {
+      token = parse_arget->substr(0, pos);
+      items.push_back(token);
+      parse_arget->erase(0, pos + 1);
     }
+    items.push_back(*parse_arget);
+    for (auto it : items) {
+      // temp_val = atoi(it->c_str());
+      temp_val += strtol ( it.c_str() , &endptr , 10 ) ;
+      if (*endptr != '\0') {
+        // Two cases: operator or number
+        // Operator
+        if (!strcmp(it.c_str(), "+") || !strcmp(it.c_str(), "-")
+            || !strcmp(it.c_str(), "*") || !strcmp(it.c_str(), "/")) {
+          continue;
+        } else {
+          // Might have subsitution
+          temp_val += sim_index_map[it];
+        }
+      } 
+      // printf("scan %s, temp_val: %ld, val: %ld\n", it.c_str(), temp_val, val);
+    }
+    if (size_dim < ar->var_n_val->size()) {
+      temp_val *= ar->var_n_val->at(size_dim)->second;
+      size_dim++;
+    } 
   }
-  return val;
+  return temp_val;
 }
 
 indexBound *find_index_bound_from_stmt(domainSpace *dom, int stmt_no, std::string index) {
@@ -1302,6 +1303,57 @@ end:
   return 1;
 }
 
+int get_address_from_gdb(std::unordered_map<std::string, ArrayRef *>  *ar, char * sim_prog_path){
+  char *gdb_args = (char *)(malloc(BUFFER_SIZE * sizeof(char)));
+  memset(gdb_args, 0, BUFFER_SIZE);
+  // The format like: gdb -batch -ex "b kernel_jacobi_2d" -ex run -ex "p A" -ex quit jacobi-2d
+  strcpy(gdb_args, "gdb -batch -ex \"b kernel_");
+  // find the last '/' in sim_prog_path
+  size_t pos = std::string(sim_prog_path).find_last_of("/");
+  // Copy from pos till the end
+  strcat(gdb_args, sim_prog_path + pos + 1);
+  // in gdb_args, replace the "-" with "_"
+  for (int i = 27; i < strlen(gdb_args); i++){
+    if (gdb_args[i] == '-') gdb_args[i] = '_';
+  }
+  strcat(gdb_args, "\" -ex run ");
+  for (auto v : *ar){
+    strcat(gdb_args, "-ex \"p ");
+    strcat(gdb_args, v.first.c_str());
+    strcat(gdb_args, "\" ");
+  }
+  strcat(gdb_args, "-ex quit ");
+  strcat(gdb_args, sim_prog_path);
+
+  printf("gdb_args: %s\n", gdb_args);
+  FILE *fp;
+  fp = popen(gdb_args, "r");
+  char out[BUFFER_SIZE];
+  std::vector<unsigned long long> *addr = new std::vector<unsigned long long>();
+  while (fgets(out, sizeof(out), fp) != NULL) {
+    if (out[0] == '$') {
+      // Be like this form: $1 = (float (*)[50]) 0x55555555a000
+      // Find the first "0x"
+      size_t start_pos = std::string(out).find("0x");
+      if (start_pos == std::string::npos) {
+        addr->push_back(0);
+        continue;
+      } else {
+        // 14 characters after "0x" is the address
+        addr->push_back(std::stoull(std::string(out).substr(start_pos + 2, 14), 0, 16));
+      }
+
+    }
+  }
+  for(auto v : *ar){
+    v.second->start_addr = addr->front();
+    addr->erase(addr->begin());
+  }
+
+  pclose(fp);
+  return 1;
+}
+
 void dump_ib(indexBound *ib){
   std::cout << "lb: " << ib->lb << ":" << ib->lb_val 
                 << " <= " << ib->index << " <="
@@ -1323,43 +1375,6 @@ void dump_node_type_str(int n){
     /* 9*/case isl_schedule_node_sequence: std::cout << "isl_schedule_node_sequence" << std::endl; break;
     /*10*/case isl_schedule_node_set: std::cout << "isl_schedule_node_set" << std::endl; break;
   }
-}
-
-/*
- * Dump of the tree, also the structure to represent
- * TODO: Separate the dump and the traverse by provide print_fn to the traverse
- */
-int extTree_traverse(extTree *tree, int n){
-  if(tree == NULL){
-    return 0;
-  }
-  // Main content tree node
-  IDT(n) std::cout << "node type: " ;
-  dump_node_type_str(tree->type);
-  IDT(n) std::cout << "child_num: " << tree->child_num;
-  std::cout << "/ curr_stmt: " << tree->curr_stmt << std::endl;
-  if (tree->type == isl_schedule_node_band){
-    IDT(n) dump_ib(tree->ib);
-  }
-
-  MemoryAccess *ar = NULL;
-  for(int i = 0; i < tree->child_num; i++){
-    if (tree->type != isl_schedule_node_leaf)
-      extTree_traverse(tree->children[i], n+2);
-    else {
-      ar = tree->access_relations[i];
-      // std::cout << ar->type << " " << ar->arrarName << " & ";
-      if (ar->type != CONSTANT){
-        char *str = isl_union_map_to_str(ar->access);
-        IDT(n) std::cout << str;
-        if (ar->type == READ) std::cout << " : read" << std::endl;
-        else std::cout << " : write" << std::endl;
-      } else {
-        IDT(n) std::cout << "Constant access: " << ar->arrarName << " : read" << std::endl;
-      }
-    }
-  }
-  return 1;
 }
 
 /* Referenced from isl_schedule_foreach_schedule_node_top_down
@@ -1428,85 +1443,65 @@ int print_node_content(extTree *node, void *user, int depth){
   return 1;
 }
 
-extTree *calc_access_order(extTree *tree, void *user, int depth){
-  dom_and_count *dc = (dom_and_count *)user;
-  if(tree == NULL){
-    return NULL;
-  }
-  domainSpace *dom = dc->dom;
-  stmtSpace *stmt = NULL;
-  indexBound *ib = NULL;
-  isl_union_set *lexmin = NULL;
-  char *str = NULL;
-  int iter_count = 0;
-  int pos_count;
-  int found = 0;
-  int val = 0;
-  int ar_ind =  0;
-  switch (tree->type){
+int gen_and_sim_addr(extTree *tree, domainSpace *dom){
+  char *dump_str;
+  unsigned long long addr;
+  switch(tree->type) {
+    case isl_schedule_node_error:
+      break;
     case isl_schedule_node_band:
-      val = tree->ib->ub_val - tree->ib->lb_val + 1;
-      dc->curr_access->top() = dc->curr_access->top() * val;
-      break;
-    case isl_schedule_node_leaf:
-      dc->curr_access->push(0);
-      for (int i = 0; i < tree->child_num; i++){
-        MemoryAccess *ma = tree->access_relations[i];
-        // find the corresponding ArrayRef from the map
-        ArrayRef *ar = dom->array_refs->at(ma->arrarName);
-        if (ma->type != CONSTANT && ar->first_access == NULL){
-          ar->first_access = isl_union_map_copy(ma->access);
-          // let me see the first access ??
-          ar->first_occur = dc->curr_access->top();
-          stmt = find_stmt_from_domain(dom, tree->curr_stmt);
-          int j = 0;
-          ar_ind = 0;
-          if (ar->var_n_val->size() == 0){
-            ar->offset = 0;
-            continue;
-          }
-          // Find the statement constraint lower bound index and value
-          for (j; j < stmt->ib_num; j++){
-            // std::cout << " stmt->ib[j]->index: " << stmt->ib[j]->index << std::endl;
-            if (ar->var_n_val->size() && !strcmp(ar->var_n_val->at(ar_ind)->first, stmt->ib[j]->index)){
-              break;
-            }
-          }
-          // Next pos to match first array index
-          for (j; j < ar->var_n_val->size() && j < (stmt->ib_num - 1); j++){
-            std::cout << "At: " << ar->name << " Size of var_n_val:" << ar->var_n_val->size() << " current j: " << j << std::endl;
-            ar->offset += calc_offset_const_val(stmt->ib[j], ma) * ar->var_n_val->at(ar_ind)->second;
-            ar_ind++;
-          }
-          // j will add 1 then compare, so just access j not j+1
-          // Sometime will not find any matching j for stmt->ib[j]
-          ar->offset += calc_offset_const_val(stmt->ib[j], ma);
-          std::cout << "Array " << ma->arrarName << " offset:  " << ar->offset << std::endl;
-        } else if (ma->type == CONSTANT && ar->first_occur == 0) {
-          ar->first_occur = dc->curr_access->top();
-          std::cout << "Constant " << ma->arrarName << " first access at:  " << ar->first_occur << std::endl;
-        }
-        dc->curr_access->top() = dc->curr_access->top() + 1;
+    //if the index is already in sim_index_map
+      // if (sim_index_map.find(tree->ib->index) != sim_index_map.end()){
+      // } else {
+      tree->execution_time = tree->ib->ub_val - tree->ib->lb_val + 1;
+      sim_index_map.insert(std::pair<std::string, int>(tree->ib->index, tree->ib->lb_val));
+      // }
+      for (int i = 0; i < tree->execution_time; i++){
+        gen_and_sim_addr(tree->children[0], dom);
+        sim_index_map[tree->ib->index]++;
       }
+      sim_index_map.erase(tree->ib->index);
+      tree->execution_time = 0;
       break;
-    // case isl_schedule_node_filter:
-    //   break;
-    case isl_schedule_node_sequence:
-      val = 0;
-      iter_count = dc->curr_access->size();
-      for (int i = 0; i < iter_count; i++){
-        val += dc->curr_access->top();
-        dc->curr_access->pop();
-      }
-      dc->curr_access->push(val);
+    case isl_schedule_node_context:
       break;
     case isl_schedule_node_domain:
-      std::cout << "Now val is: " << dc->curr_access->top() << std::endl;
+      gen_and_sim_addr(tree->children[0], dom);
       break;
-    default:
+    case isl_schedule_node_expansion:
+      break;
+    case isl_schedule_node_extension:
+      break;
+    case isl_schedule_node_filter:
+      gen_and_sim_addr(tree->children[0], dom);
+      break;
+    case isl_schedule_node_leaf:
+      // Phase generate the address
+      for (int i = 0; i < tree->child_num; i++){
+        if (tree->access_relations[i]->type != CONSTANT) {
+          addr = dom->array_refs->at(tree->access_relations[i]->arrarName)->start_addr
+                + 4 * calc_offset_const_val(tree->access_relations[i], tree->dom->array_refs->at(tree->access_relations[i]->arrarName));
+          // printf("ArrayRef addr: 0x%.10llx\n", addr);
+        } else {
+          // Constant access
+          addr = 0x000010a00c;
+          // printf("Constant addr: 0x%.12llx\n", addr);
+        }
+      }
+      break;
+    case isl_schedule_node_guard:
+      break;
+    case isl_schedule_node_mark:
+      break;
+    case isl_schedule_node_sequence:
+      for (int i = 0; i < tree->child_num; i++){
+        gen_and_sim_addr(tree->children[i], dom);
+      }
+      break;
+    case isl_schedule_node_set:
       break;
   }
-  return tree;
+  return 1;
 }
 
 /*
@@ -1642,14 +1637,6 @@ int main(int argc, char *argv[]) {
           }
       }
   }
-
-  std::cout << "ArrayRefs: " << std::endl;
-  for (auto v : *dom->array_refs){
-    std::cout << v.first << std::endl;
-    for (auto p : *v.second->var_n_val){
-      std::cout << p->first << " : " << p->second << "| ";
-    } std::cout << std::endl;
-  }
   #endif
   /* 
    * int construction(isl_schedule_node *node, void *user)
@@ -1670,182 +1657,30 @@ int main(int argc, char *argv[]) {
   while (tree->parent != NULL) {
     tree = tree->parent;
   }
-  /* 
-   * int extTree_preorder_traverse(extTree *tree, int (*fn)(extTree *node, void *user, int depth), void *user, int depth)
-   * int print_node_content(extTree *node, void *user, int depth)
-   * 
-   * A callback function to traverse the tree, provide the depth additionally
-   * The print_node_content is a callback function to print the content of the node,
-   * which stop at leaf node. 
-   * 
-   * This indnet is useless actually ... ( The int indent = 0; )
-   * However for full functionality support we preserve it
-   */ 
-  int indent = 0;
-  dom_and_count *user= init_dom_and_count(dom);
-  extTree *traverse =  extTree_postorder_traverse (tree->children[0], &calc_access_order, user, 0);
-  // extTree_preorder_traverse (tree, &print_node_content, &user, 0);
-  // dump the unordered map array ref from the domainSpace
 
-
-  std::vector<ArrayRef *> *access_order = new std::vector<ArrayRef *>();
-  for (auto p : *dom->array_refs){
-    access_order->push_back(p.second);
+  // Construct the char array for launching gdb
+  get_address_from_gdb(dom->array_refs, sim_prog_path);
+  #ifdef DEBUG
+  std::cout << "ArrayRefs: " << std::endl;
+  for (auto v : *dom->array_refs){
+    std::cout << v.first << std::endl;
+    for (auto p : *v.second->var_n_val){
+      std::cout << p->first << " : " << p->second << "| ";
+    } 
+    printf("start_addr: 0x%.10llx\n", v.second->start_addr);
   }
-  // sort by first_occur in ArrayRef
-  std::sort(access_order->begin(), access_order->end(), [](ArrayRef *a, ArrayRef *b) {return a->first_occur < b->first_occur;} );
+  #endif
 
-  // if (status == 1)
-  // {
-  //   printf("Error: Unable to extract domain from the schedule\n");
-  //   return 1;
-  // }
-    /**********************************************/
-   /*          End of collecting data            */
-  /**********************************************/
-
-  int stmt = 1;
-  // Read from the file after ##### occurs
-  
-  // Create pipe descriptors
-  int pipe_fd[2];
-  if (pipe(pipe_fd) == -1) {
-    perror("pipe");
-    exit(EXIT_FAILURE);
-  }
-  /*                  Extracttion                  */
 
     /**********************************************/
-   /*                Call valgrind               */
+   /*              Sim phase Start               */
   /**********************************************/
 
-  // Fork a child process
-  pid_t pid = fork();
-  if (pid == -1) {
-    perror("fork");
-    exit(EXIT_FAILURE);
-  }
+  status = gen_and_sim_addr(tree, dom);
 
-  if (pid == 0) { // Child process (Program A)
-    // Close the read end of the pipe
-    close(pipe_fd[0]);
-
-    // Redirect stdout to the pipe
-  // It's magic, read from STDOUT and use VG_(message)(Vg_ClientMsg ... ) can send to the pipe
-    dup2(pipe_fd[1], STDOUT_FILENO);
-
-    // Close unused pipe descriptors
-    close(pipe_fd[1]);
-
-    // Change the working directory
-    if (chdir("/home/dreyex/Documents/Research/PPT") == 0) {
-      printf("Changed directory to /path/to/new_directory\n");
-    } else {
-      perror("chdir() error");
-      return 1;
-    }
-
-    // Execute Program A
-    // Since pass the program by arvg is sophisticated, we use execl with fixed path instead
-    // What if then we have to run the batch of benchmarks?
-    execl("/home/dreyex/Documents/Research/PPT/./vg-in-place", "vg-in-place",
-          "--tool=cachegrind", "--instr-at-start=no", "--cache-sim=yes",
-          "--D1=49152,12,64", "--I1=32768,8,64", "--L2=1310720,10,64", "-v", 
-          "--log-fd=1", sim_prog_path, NULL);
-    perror("execl");
-    exit(EXIT_FAILURE);
-  } else { // Parent process (Program B)
-    // Close the write end of the pipe
-    int counter = 0;
-    close(pipe_fd[1]);
-
-    // Read from the pipe continuously
-    char buffer[BUFFER_SIZE];
-    ssize_t bytes_read;
-    char cache[BUFFER_SIZE * 2]; // Double the buffer size for caching
-    size_t cache_index = 0;
-    int stop_receiving = 0;
-    while (!stop_receiving &&
-           (bytes_read = read(pipe_fd[0], buffer, BUFFER_SIZE)) > 0) {
-      // Check if caching the data would exceed the buffer size
-      if (cache_index + bytes_read >= sizeof(cache)) {
-        fprintf(stderr, "Error: Buffer overflow\n");
-        exit(EXIT_FAILURE);
-      }
-
-      // Cache the received data
-      memcpy(cache + cache_index, buffer, bytes_read);
-      cache_index += bytes_read;
-
-      // Check if there is a complete line in the cache
-      long long unsigned int n = 0;
-      long long unsigned int skip = 0x1ffeff0000;
-      char *line_start = cache;
-      char *line_end;
-      char access;
-      int line_no, size, first_access_index = 0;
-      unsigned long long int addr;
-      /*
-       * Recording the address, add thme into polyhedral model
-       * Why we still need to record? 
-       * Since sometimes the address is not that continuous as what we thought
-       * physical address may change the page instead ( just an assumption )
-       */
-      while ((line_end = strchr(line_start, '\n')) != NULL) {
-        // Null-terminate the line
-        *line_end = '\0';
-
-        // Check if the line starts with '%'
-        if (line_start[0] == '*') {
-          // Output the line
-          sscanf(line_start, "**%*d** & %c %d %llx %d", &access, &line_no, &addr, &size);
-          // printf("Access: %c, Line No: %d, Address: 0x%.10llx, Size: %d\n", access, line_no, addr, size);
-          if (!addr || addr >= skip){
-            // std::cout << "is skip" << std::endl; 
-            line_start = line_end + 1;
-            continue;
-          }
-
-          // Output parsed values
-          if (first_access_index < access_order->size() && counter == access_order->at(first_access_index)->first_occur){
-            access_order->at(first_access_index)->start_addr = addr - access_order->at(first_access_index)->offset * size;
-            printf("Array: %s, First Occur: %d, Start Address: 0x%.10llx\n", access_order->at(first_access_index)->name, access_order->at(first_access_index)->first_occur, access_order->at(first_access_index)->start_addr);
-            first_access_index++;
-          }
-          counter++;
-        }
-
-        // Check if the line starts with '#', then stop receiving
-        if (line_start[0] == '#') {
-          stop_receiving = 1;
-          break;
-        }
-
-        // Move to the next line
-        line_start = line_end + 1;
-      }
-
-      // Move the remaining data to the beginning of the cache
-      size_t remaining_bytes = cache_index - (line_start - cache);
-      memmove(cache, line_start, remaining_bytes);
-      cache_index = remaining_bytes;
-    }
-    printf("There are %d line of output to here\n", counter);
-    // Dump the access_order
-    for (auto p : *access_order){
-      std::cout << "Array: " << p->name << " First Occur: " << p->first_occur << " Start Address: 0x" << std::hex << p->start_addr << std::dec << std::endl;
-    }
-
-    // Close the read end of the pipe
-    close(pipe_fd[0]);
-
-    // Wait for the child process to finish
-    int status;
-    waitpid(pid, &status, 0);
-  }
-  // free ArrayRef->union_map
-  for (auto p : *access_order){
-    isl_union_map_free(p->first_access);
+  if (status == 1) {
+    printf("Error, terminated\n");
+    exit(1);
   }
   // Free the array of ptr
   for (int i = 0; i < compilation_unit; i++) {
