@@ -197,6 +197,8 @@ struct extTree {
     MemoryAccess **access_relations;
     extTree **children;
   };
+  /* The depth of node ref by isl schedule tree */
+  int depth;
   /* The number of children */
   int child_num;
   /* Current at which children */
@@ -271,6 +273,16 @@ dom_and_count *init_dom_and_count(domainSpace *dom) {
   dc->dom = dom;
   dc->curr_access = new std::stack<int>();
   return dc;
+}
+
+MemoryAccess *copy_MemoryAccess(MemoryAccess *ma) {
+  MemoryAccess *new_ma = new MemoryAccess();
+  new_ma->indent = ma->indent;
+  new_ma->lineno = ma->lineno;
+  new_ma->type = ma->type;
+  new_ma->arrarName = ma->arrarName.c_str();
+  new_ma->access = isl_union_map_copy(ma->access);
+  return new_ma;
 }
 
 /* By this point, the size/assoc/line_size has been checked. */
@@ -1018,6 +1030,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       parent->children[parent->child_num] = current;
       parent->child_num++;
       current->type = isl_schedule_node_band;
+      current->depth = isl_schedule_node_get_tree_depth(node);
       band_temp = isl_schedule_node_get_subtree_schedule_union_map(node);
       isl_obj_str = isl_union_map_to_str(band_temp);
       // Something like band: [tsteps, n] -> { S1[t, i, j] -> [i, j] }
@@ -1049,24 +1062,28 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       parent->children[parent->child_num] = current;
       parent->child_num++;
       current->type = isl_schedule_node_context;
+      current->depth = isl_schedule_node_get_tree_depth(node);
       break;
     
     case isl_schedule_node_domain:
       parent->children[parent->child_num] = current;
       parent->child_num++;
       current->type = isl_schedule_node_domain;
+      current->depth = isl_schedule_node_get_tree_depth(node);
       break;
     
     case isl_schedule_node_expansion:
       parent->children[parent->child_num] = current;
       parent->child_num++;
       current->type = isl_schedule_node_expansion;
+      current->depth = isl_schedule_node_get_tree_depth(node);
       break;
     
     case isl_schedule_node_extension:
       parent->children[parent->child_num] = current;
       parent->child_num++;
       current->type = isl_schedule_node_extension;
+      current->depth = isl_schedule_node_get_tree_depth(node);
       break;
     
     /*
@@ -1074,6 +1091,10 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
      * (Maybe the domainSpace shall know which stmt we're at)
      */
     case isl_schedule_node_filter:
+      current->depth = isl_schedule_node_get_tree_depth(node);
+      while (parent->depth >= current->depth){
+        parent = parent->parent;
+      }
       parent->children[parent->child_num] = current;
       filter_temp = isl_schedule_node_filter_get_filter(node);
       isl_obj_str = isl_union_set_to_str(filter_temp);
@@ -1103,8 +1124,10 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       parent->children[parent->child_num] = current;
       parent->child_num++;
       current->type = isl_schedule_node_leaf;
+      current->depth = isl_schedule_node_get_tree_depth(node);
       // From accessPerStmt in domainSpace find the access of this stmt
       curr_stmt = 0;
+      std::cout << "current->curr_stmt: " << current->curr_stmt << std::endl;
       for (auto v : *current->dom->mem_access) {
         if (v->first == current->curr_stmt) {
           break;
@@ -1112,6 +1135,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
           curr_stmt++;
         }
       }
+      std::cout << "curr_stmt: " << curr_stmt << std::endl;
       cur_mem_access = current->dom->mem_access->at(curr_stmt)->second;
       current->access_relations = (MemoryAccess **)(malloc(cur_mem_access->size() * sizeof(MemoryAccess *)));
       for (auto v : *cur_mem_access) {
@@ -1131,12 +1155,14 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       parent->children[parent->child_num] = current;
       parent->child_num++;
       current->type = isl_schedule_node_guard;
+      current->depth = isl_schedule_node_get_tree_depth(node);
       break;
     
     case isl_schedule_node_mark:
       parent->children[parent->child_num] = current;
       parent->child_num++;
       current->type = isl_schedule_node_mark;
+      current->depth = isl_schedule_node_get_tree_depth(node);
       break;
     
     /*
@@ -1147,6 +1173,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       parent->children[parent->child_num] = current;
       parent->child_num++;
       current->type = isl_schedule_node_sequence;
+      current->depth = isl_schedule_node_get_tree_depth(node);
       current->children = (extTree **)(malloc(10 * sizeof(extTree *)));
       break;
     
@@ -1154,6 +1181,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       parent->children[parent->child_num] = current;
       parent->child_num++;
       current->type = isl_schedule_node_set;
+      current->depth = isl_schedule_node_get_tree_depth(node);
       break;
   }
   // printf("current: %p\n", current);
@@ -1247,6 +1275,11 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
       }
   }
 
+  // Dump the pet_tree_tag
+  for (auto &v : pet_tree_tag){
+      std::cout << v->first << " " << v->second << std::endl;
+  }
+
   isl_ctx *ctx = isl_ctx_alloc();
   int cur_line = 0;
   int stmt;
@@ -1307,7 +1340,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
       for (auto &v : pet_tree_tag){
         if(v->second == stmt){
             cur_line++;
-            // cout << "S" << cur_line << " " << stmt << endl;
+            std::cout << "S" << cur_line << " " << stmt << std::endl;
             found = 1;
             break;
         }
@@ -1330,8 +1363,12 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
       while(1){
         // Go to the line that contains "type"
         for(i; i < pet_tree.size(); i++){
-            if(pet_tree[i][0] == '-')
-                goto end;
+            if(pet_tree[i][0] == '-'){
+              // The - line: xx may be skipped instanly, reverse it back
+              // For safety (bicg case)
+              i--;
+              goto end;
+            }
             if(pet_tree[i].find("type") != std::string::npos){
                 break;
             }
@@ -1363,7 +1400,8 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
         mem->indent = s.find("- type");
         mem->lineno = i;
         char *ib_name;
-        int is_write = 0;
+        int is_read = 0;
+        int is_also_write = 0;
         int has_val = 0;
         int bound_val = 0;
 
@@ -1384,7 +1422,9 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
               else established_map[mem->arrarName] = 1; // Not established before
             } 
             /* extracted part like Sn[index] -> arr[ subscript ] */
-            start_pos = str.find(mem->arrarName);
+            start_pos = str.find("->");
+            start_pos = str.find("->", start_pos + 1);
+            start_pos = str.find(mem->arrarName, start_pos + 1);
             end_pos = str.find("}", start_pos);
             curr_stmt = extract_stmt_no_regex(extracted_part);
             /* [] part */
@@ -1393,9 +1433,9 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
             tokens = split(extracted_part, ',', "[", "]");
             for (auto nn : tokens) {
               // remove head tail "(" and ")"
+              // std::cout << "nn: " << nn << std::endl;
               nn.erase(0, 1);
               nn.erase(nn.size() - 1, 1);
-              // std::cout << "nn: " << nn << std::endl;
               ib = find_index_bound_from_stmt(dom, curr_stmt, nn);
               if (!ib) continue;
               // find item from unordered_map and push it to the var_n_val
@@ -1418,12 +1458,22 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
             }
             /* get the stmt no and the subscript */
 already_established:
-            i+=3;
+            i+=2;
             str = pet_tree[i];
-            sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%d", type, &is_write);
-            mem->type = is_write ? WRITE : READ;
+            sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%d", type, &is_read);
+            mem->type = is_read ? READ : WRITE;
             maPair->second->push_back(mem);
-            
+            if (is_read){
+              i++;
+              str = pet_tree[i];
+              sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%d", type, &is_also_write);
+              if (is_also_write){
+                MemoryAccess *mem2 = copy_MemoryAccess(mem);
+                mem2->type = WRITE;
+                maPair->second->push_back(mem2);
+              }
+              i--;
+            }
             break;
           case  hash_compile_time( "double" ): 
             // cout << "Double" << endl;
@@ -1448,6 +1498,8 @@ end:
       found = 0;
       // reverse the vector in pair->second
       sort(maPair->second->begin(), maPair->second->end() , [](const MemoryAccess* a, const MemoryAccess* b) {
+          // READ before WRITE
+          if (a->indent == b->indent && a->lineno == b->lineno) return a->type > b->type;
           if (a->indent != b->indent){
               return a->indent > b->indent;
           } else {
@@ -1579,7 +1631,8 @@ int print_node_content(extTree *node, void *user, int depth){
   IDT(n) std::cout << "node type: " ;
   dump_node_type_str(node->type);
   IDT(n) std::cout << "child_num: " << node->child_num;
-  std::cout << "/ curr_stmt: " << node->curr_stmt << std::endl;
+  std::cout << "/ curr_stmt: " << node->curr_stmt;
+  std::cout << "/ node_depth: " << node->depth << std::endl;
   if (node->type == isl_schedule_node_band){
     IDT(n) dump_ib(node->ib);
   }
@@ -1616,6 +1669,7 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
       sim_index_map.insert(std::pair<std::string, int>(tree->ib->index, tree->ib->lb_val));
       // }
       for (int i = 0; i < tree->execution_time; i++){
+        // std::cout << "index: " << tree->ib->index << " value: " << sim_index_map[tree->ib->index] << std::endl;
         gen_and_sim_addr(tree->children[0], dom);
         sim_index_map[tree->ib->index]++;
       }
@@ -1638,6 +1692,8 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
       // Phase generate the address
       for (int i = 0; i < tree->child_num; i++){
         MemoryAccess *ar = tree->access_relations[i];
+        // addr 0 like alpha beta no need to simulate
+        if (!dom->array_refs->at(ar->arrarName)->start_addr) continue;
         if (ar->type != CONSTANT) {
           addr = dom->array_refs->at(ar->arrarName)->start_addr
                 + 4 * calc_offset_const_val(ar, tree->dom->array_refs->at(ar->arrarName));
@@ -1648,7 +1704,7 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
             Dr++;
             cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1mr, &DLmr);
           }
-          // printf("ArrayRef addr: 0x%.10llx\n", addr);
+          // printf("ArrayRef %d S%d addr: 0x%.10llx\n",ar->type, tree->curr_stmt,addr);
         } else {
           // Constant access
           addr = 0x000010a00c;
@@ -1818,6 +1874,7 @@ int main(int argc, char *argv[]) {
   extTree *tree = init_extTree(dom, NULL);
   tree->child_num = 0;
   tree->type = isl_schedule_node_domain;
+  tree->depth = 0;
 	schedule = isl_schedule_read_from_file(ctx, file);
   /* ExtTree Construction with callback function construction() ... */
   isl_stat stat_ret = isl_schedule_foreach_schedule_node_top_down(schedule,
@@ -1845,10 +1902,11 @@ int main(int argc, char *argv[]) {
    /*              Sim phase Start               */
   /**********************************************/
 
-  if (status == 1) {
-    printf("Error: get_access_relation_from_pet failed\n");
-    return 1;
-  }
+  // status = extTree_preorder_traverse(tree, &print_node_content, NULL, 0);
+  // if (status == 1) {
+  //   printf("Error: get_access_relation_from_pet failed\n");
+  //   return 1;
+  // }
 
   cache_t  D1c, LLc;
   D1c = (cache_t) { 32768, 8, 64 };
