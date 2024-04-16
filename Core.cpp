@@ -587,6 +587,7 @@ inline void parse_inequality(const std::string &s, stmtSpace *stmt){
   int occurrences = 0;
   size_t pos = 0;
   size_t temp = 0;
+  size_t find_start = 0;
   size_t index_pos = std::string::npos;
   int index_var = -1;
   // Find which index this inequality is for
@@ -596,25 +597,31 @@ inline void parse_inequality(const std::string &s, stmtSpace *stmt){
    * So we need to find the index var that have the smaller index_pos
    * Rather than the first one we've found
    */
+  // Find which inequality it is (2 or 3 elements?)
+  while ((pos = s.find(tok, pos )) != std::string::npos) {
+          ++ occurrences;
+          pos += tok.length();
+  }
+
+  if (occurrences == 2){
+    find_start = s.find("<");
+  }
+
   for (int i = 0; i < stmt->ib_num; i++) {
-    temp = s.find(stmt->names[i]);
+    temp = s.find(stmt->names[i], find_start);
     if (temp < index_pos) {
       // This is the index
       index_pos = temp;
       index_var = i;
     }
   }
+
   if (index_var == -1) {
     std::cout << "Error: index_var not found" << std::endl;
     return;
   }
   // std::cout << "handle: " << stmt->names[index_var] << std::endl;
 
-  // Find which inequality it is (2 or 3 elements?)
-  while ((pos = s.find(tok, pos )) != std::string::npos) {
-          ++ occurrences;
-          pos += tok.length();
-  }
   // std::cout << "occurrences: " << occurrences << std::endl;
 
   if (occurrences == 2) {
@@ -622,6 +629,13 @@ inline void parse_inequality(const std::string &s, stmtSpace *stmt){
     size_t pos = s.find("<");
     // Start from 1, bypass the space
     std::string elem = s.substr(1, pos-1);
+    // if elem starts  or ends with space, remove it
+    if (elem[0] == ' ') {
+      elem.erase(0, 1);
+    }
+    if (elem[elem.length() - 1] == ' ') {
+      elem.erase(elem.length() - 1, 1);
+    }
     stmt->ib[index_var]->lb = (char *)(malloc(elem.length() + 1));
     strcpy(stmt->ib[index_var]->lb, elem.c_str());
     // If the next char is "=", then it's less than or equal
@@ -641,6 +655,12 @@ inline void parse_inequality(const std::string &s, stmtSpace *stmt){
     // Bypass the " "
     pos++;
     elem = s.substr(pos + 1, s.length() - pos - 1);
+    if (elem[0] == ' ') {
+      elem.erase(0, 1);
+    }
+    if (elem[elem.length() - 1] == ' ') {
+      elem.erase(elem.length() - 1, 1);
+    }
     stmt->ib[index_var]->ub = (char *)(malloc(elem.length() + 1));
     strcpy(stmt->ib[index_var]->ub, elem.c_str());
     // If the next char is "=", then it's less than or equal
@@ -662,6 +682,12 @@ inline void parse_inequality(const std::string &s, stmtSpace *stmt){
     // std::cout << "pos: " << pos << std::endl;
     // get over the sign, take the val
     std::string elem = s.substr(pos+2, s.size());
+    if (elem[0] == ' ') {
+      elem.erase(0, 1);
+    }
+    if (elem[elem.length() - 1] == ' ') {
+      elem.erase(elem.length() - 1, 1);
+    }
     // std::cout << "elem: " << elem << std::endl;
     big ? stmt->ib[index_var]->lb = (char *)(malloc(elem.length() + 1)) : 
           stmt->ib[index_var]->ub = (char *)(malloc(elem.length() + 1));
@@ -675,6 +701,11 @@ inline void compensate(stmtSpace *stmt, int index, int is_ub){
     // Upper bound is null? Might be someone's lower bound
     for (int i = 0; i < stmt->ib_num; i++) {
       if (stmt->ib[i]->lb != NULL && !strcmp(stmt->ib[i]->lb, stmt->ib[index]->index)) {
+        if (!stmt->ib[i]->ub){
+          stmt->ib[index]->ub = (char *)(malloc(2));
+          strncpy(stmt->ib[index]->ub, "0", 2);
+          return;
+        }
         stmt->ib[index]->ub = (char *)(malloc(strlen(stmt->ib[i]->ub) + 1));
         strncpy(stmt->ib[index]->ub, stmt->ib[i]->ub, strlen(stmt->ib[i]->ub));
       }
@@ -683,6 +714,11 @@ inline void compensate(stmtSpace *stmt, int index, int is_ub){
     // Lower bound is null
     for (int i = 0; i < stmt->ib_num; i++) {
       if (stmt->ib[i]->ub != NULL && !strcmp(stmt->ib[i]->ub, stmt->ib[index]->index)) {
+        if (!stmt->ib[i]->lb){
+          stmt->ib[index]->lb = (char *)(malloc(2));
+          strncpy(stmt->ib[index]->lb, "0", 2);
+          return;
+        }
         stmt->ib[index]->lb = (char *)(malloc(strlen(stmt->ib[i]->lb) + 1));
         strncpy(stmt->ib[index]->lb, stmt->ib[i]->lb, strlen(stmt->ib[i]->lb));
       }
@@ -705,7 +741,9 @@ int extract_dom_from_sched(FILE *file, domainSpace *dom) {
   // Some input like this: 
   // domain: "[tsteps, n] -> { S1[t, i, j] : 0 <= t < tsteps and 0 < i <= -2 + n and 0 < j <= -2 + n; S2[t, i, j] : 0 <= t < tsteps and 0 < i <= -2 + n and 0 < j <= -2 + n }"
   // First parse the variable part: [tsteps, n]
+  #ifdef DEBUG
   std::cout << "start parsing line: " << line << std::endl;
+  #endif
   std::list<std::string> tokens = split(line, ',', "[", "]");
   for (std::list<std::string>::iterator it = tokens.begin(); it != tokens.end(); it++) {
     // copy to dom variable
@@ -735,14 +773,25 @@ int extract_dom_from_sched(FILE *file, domainSpace *dom) {
     }
     stmt->ib_num = num_iter;
 
+    // // Dump all stmt ib to see before compensate
+    // for (int i = 0; i < stmt->ib_num; i++) {
+    //   std::cout << "stmt: " << stmt->stmt_no << " ib: " << stmt->ib[i]->index << std::endl;
+    // }
+
     // Parse the inequality (constraint part)
     for (auto c : constraints) {
       parse_inequality(c, stmt);
     }
     // Compensation for unfound upper/lower bound:
     for (int i = 0; i < stmt->ib_num; i++) {
-      if (stmt->ib[i]->ub == NULL)  compensate(stmt, i, 1);
-      else if (stmt->ib[i]->lb == NULL) compensate(stmt, i, 0);
+      if (stmt->ib[i]->ub == NULL) {
+        // std::cout << "compensating: " << stmt->ib[i]->index << " at upper" << std::endl;
+        compensate(stmt, i, 1);
+      } 
+      else if (stmt->ib[i]->lb == NULL) {
+        // std::cout << "compensating: " << stmt->ib[i]->index << " at lower" << std::endl;
+        compensate(stmt, i, 0);
+      }
     }
     dom->stmt[dom->stmt_num] = stmt;
     dom->stmt_num++;
@@ -827,6 +876,7 @@ int calc_eq(const char *var) {
   // tokenize the var, make all elem to list, sepqrate by " "
   long int temp_val = 0;
   long int val = 0;
+  int found = 0;
   char *endptr;
   std::list<std::string> tokens;
   std::string token;
@@ -858,11 +908,13 @@ int calc_eq(const char *var) {
         for (auto p : var_n_val) {
           if (!strcmp(p.first, it->c_str())) {
             // std::cout << "substituting: " << it->c_str() << " to " << p.second << std::endl;
+            found = 1;
             temp_val = p.second;
             val += temp_val;
             break;
           }
         }
+        if (!found) return -2;
       }
     } else {
       val += temp_val;
@@ -892,7 +944,8 @@ int calc_dom_bound(domainSpace *dom) {
       if (ib->ub != NULL)
       {if (ib->is_gt) std::cout << " < ";
       else std::cout << " <= " ;
-      std::cout << ib->ub << std::endl;}
+      std::cout << ib->ub;}
+      std::cout << std::endl;
     }
   }
   #endif
@@ -903,8 +956,7 @@ int calc_dom_bound(domainSpace *dom) {
       indexBound *ib = stmt->ib[j];
       ib->ub_val = calc_eq(ib->ub);
       // Val -1 is preserved for the case of no upper bound
-      if (ib->is_gt && ib->ub_val != -1) ib->ub_val--;
-      // if (ib->is_gt) ib->ub_val--;
+      if (ib->is_gt) ib->ub_val--;
       ib->lb_val = calc_eq(ib->lb);
       if (ib->is_lt) ib->lb_val++;
     }
@@ -1228,10 +1280,12 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
     strcat(arg_list, " ");
   }
 
-  std::cout << "arg_list: " << arg_list << std::endl;
   snprintf(pet_call, BUFFER_SIZE-1, "%s/pet %s %s", exe_prog_path, arg_list, pet_prog_args);
   char *line_ch = NULL;
+  #ifdef DEBUG
+  std::cout << "arg_list: " << arg_list << std::endl;
   std::cout << "pet call: " << pet_call << std::endl;
+  #endif
   std::string line;
   std::vector<std::string> pet_tree;
   std::vector<std::string> source_code;
@@ -1278,9 +1332,9 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
   }
 
   // Dump the pet_tree_tag
-  for (auto &v : pet_tree_tag){
-      std::cout << v->first << " " << v->second << std::endl;
-  }
+  // for (auto &v : pet_tree_tag){
+  //     std::cout << v->first << " " << v->second << std::endl;
+  // }
 
   isl_ctx *ctx = isl_ctx_alloc();
   int cur_line = 0;
@@ -1328,8 +1382,10 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
   int found = 0;
   int curr_stmt = 0;
   char op[BUFFER_SIZE] = {0};
+  #ifdef DEBUG
   std::cout << "i: " << i << std::endl;
   std::cout << "pet_tree.size(): " << pet_tree.size() << std::endl;
+  #endif
   // From now on only "- line" starts at the beginning of the line
   for(i ; i < pet_tree.size();i++){
     if(pet_tree[i][0] == '-'){
@@ -1342,7 +1398,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
       for (auto &v : pet_tree_tag){
         if(v->second == stmt){
             cur_line++;
-            std::cout << "S" << cur_line << " " << stmt << std::endl;
+            // std::cout << "S" << cur_line << " " << stmt << std::endl;
             found = 1;
             break;
         }
@@ -1537,8 +1593,9 @@ int get_address_from_gdb(std::unordered_map<std::string, ArrayRef *>  *ar, char 
   }
   strcat(gdb_args, "-ex quit ");
   strcat(gdb_args, sim_prog_path);
-
+  #ifdef DEBUG
   printf("gdb_args: %s\n", gdb_args);
+  #endif
   FILE *fp;
   fp = popen(gdb_args, "r");
   char out[BUFFER_SIZE];
@@ -1661,6 +1718,7 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
   char *dump_str;
   unsigned long long addr;
   int real_ub;
+  int real_lb;
   switch(tree->type) {
     case isl_schedule_node_error:
       break;
@@ -1669,11 +1727,15 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
       // if (sim_index_map.find(tree->ib->index) != sim_index_map.end()){
       // } else {
       // Not sure why will 0 case happen
-      if (tree->ib->ub_val == -1 || tree->ib->ub_val == 0) {
+      if (tree->ib->ub_val <= -1) {
         real_ub = sim_index_map[tree->ib->ub];
         tree->ib->is_gt ? real_ub -= 1 : real_ub = real_ub;
         tree->execution_time = real_ub - tree->ib->lb_val + 1;
-      } 
+      } else if (tree->ib->lb_val <= -1) {
+        real_lb = sim_index_map[tree->ib->lb];
+        tree->ib->is_lt ? real_lb += 1 : real_lb = real_lb;
+        tree->execution_time = tree->ib->ub_val - real_lb + 1;
+      }
       else
         tree->execution_time = tree->ib->ub_val - tree->ib->lb_val + 1;
       sim_index_map.insert(std::pair<std::string, int>(tree->ib->index, tree->ib->lb_val));
@@ -1703,8 +1765,8 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
       for (int i = 0; i < tree->child_num; i++){
         MemoryAccess *ar = tree->access_relations[i];
         // addr 0 like alpha beta no need to simulate
-        if (!dom->array_refs->at(ar->arrarName)->start_addr) continue;
         if (ar->type != CONSTANT) {
+          if (!dom->array_refs->at(ar->arrarName)->start_addr) continue;
           addr = dom->array_refs->at(ar->arrarName)->start_addr
                 + 4 * calc_offset_const_val(ar, tree->dom->array_refs->at(ar->arrarName));
           if (ar->type == WRITE){
@@ -1750,6 +1812,7 @@ int main(int argc, char *argv[]) {
   exe_prog_path = argv[2];
   pet_prog_args = argv[3];
   int status = 0;
+  std::cout << "Simulate the program: " << sim_prog_path << std::endl;
 
   /* 
    * int parse_dwarf(char **unit, FILE *fp)
@@ -1858,7 +1921,6 @@ int main(int argc, char *argv[]) {
   mem_access = new accessPerStmt();
   dom->mem_access = mem_access;
   status = get_access_relation_from_pet(dom, mem_access, unit, compilation_unit);
-  std::cout << "mem_access size: " << mem_access->size() << std::endl;
   #ifdef DEBUG
   char *dump_str;
   for(auto v : *mem_access){
