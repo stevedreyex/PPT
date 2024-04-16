@@ -520,7 +520,7 @@ int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit) {
   // strcat(ppcg_call, "--save-schedule=/home/dreyex/use_this/schedule/jacobi-2d.sched");
   
   // A "--no-reschedule" flag is added to prevent ppcg from rescheduling the program
-  snprintf(ppcg_call, BUFFER_SIZE-1, "%s/ppcg %s --no-reschedule --save-schedule=%s", exe_prog_path, ppcg_args, sched);
+  snprintf(ppcg_call, BUFFER_SIZE-1, "%s/ppcg %s %s --no-reschedule --save-schedule=%s", exe_prog_path, ppcg_args, pet_prog_args, sched);
   #ifdef DEBUG
   printf("ppcg call: %s\n", ppcg_call);
   #endif
@@ -1181,7 +1181,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       current->depth = isl_schedule_node_get_tree_depth(node);
       // From accessPerStmt in domainSpace find the access of this stmt
       curr_stmt = 0;
-      // std::cout << "current->curr_stmt: " << current->curr_stmt << std::endl;
+      std::cout << "current->curr_stmt: " << current->curr_stmt << std::endl;
       for (auto v : *current->dom->mem_access) {
         if (v->first == current->curr_stmt) {
           break;
@@ -1189,7 +1189,13 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
           curr_stmt++;
         }
       }
-      // std::cout << "curr_stmt: " << curr_stmt << std::endl;
+      if (curr_stmt == current->dom->mem_access->size()) {
+        // Case seidel-2d
+        // Since this is the one-and-only stmt, no possibilities to pass the filter
+        // So current->curr_stmt is 0
+        curr_stmt = 0;
+      }
+      std::cout << "curr_stmt: " << curr_stmt << std::endl;
       cur_mem_access = current->dom->mem_access->at(curr_stmt)->second;
       current->access_relations = (MemoryAccess **)(malloc(cur_mem_access->size() * sizeof(MemoryAccess *)));
       for (auto v : *cur_mem_access) {
@@ -1198,7 +1204,8 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
         current->child_num++;
       }
       // Shall back to the sequence where it from
-      while (parent->type != isl_schedule_node_sequence) {
+      // There's a sequence node to back to if it is not the only stmt -> && curr_stmt
+      while (parent->type != isl_schedule_node_sequence && curr_stmt) {
         // Child Starts at 1
         parent = parent->parent;
       }
@@ -1472,6 +1479,17 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
             start_pos = str.find("{");
             end_pos = str.find("}");
             extracted_part = str.substr(start_pos, end_pos - start_pos+1);
+            if (end_pos == std::string::npos) {
+              // The content is at the next line, but the next line starts with space
+              // remove the space after concat to the extracted_part
+              i++;
+              str = pet_tree[i];
+              start_pos = 0;
+              while (str[start_pos] != ' ') start_pos++;
+              // concat the content to the extracted_part
+              extracted_part += str.substr(start_pos, str.length() - start_pos);
+            }
+            std::cout << "extracted_part: " << extracted_part << std::endl;
             union_map = isl_union_map_read_from_str(ctx, extracted_part.c_str());
             mem->access = union_map;
             mem->arrarName = extractRefName(extracted_part);
