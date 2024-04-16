@@ -902,7 +902,9 @@ int calc_dom_bound(domainSpace *dom) {
     for (int j = 0; j < stmt->ib_num; j++) {
       indexBound *ib = stmt->ib[j];
       ib->ub_val = calc_eq(ib->ub);
-      if (ib->is_gt) ib->ub_val--;
+      // Val -1 is preserved for the case of no upper bound
+      if (ib->is_gt && ib->ub_val != -1) ib->ub_val--;
+      // if (ib->is_gt) ib->ub_val--;
       ib->lb_val = calc_eq(ib->lb);
       if (ib->is_lt) ib->lb_val++;
     }
@@ -1127,7 +1129,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       current->depth = isl_schedule_node_get_tree_depth(node);
       // From accessPerStmt in domainSpace find the access of this stmt
       curr_stmt = 0;
-      std::cout << "current->curr_stmt: " << current->curr_stmt << std::endl;
+      // std::cout << "current->curr_stmt: " << current->curr_stmt << std::endl;
       for (auto v : *current->dom->mem_access) {
         if (v->first == current->curr_stmt) {
           break;
@@ -1135,7 +1137,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
           curr_stmt++;
         }
       }
-      std::cout << "curr_stmt: " << curr_stmt << std::endl;
+      // std::cout << "curr_stmt: " << curr_stmt << std::endl;
       cur_mem_access = current->dom->mem_access->at(curr_stmt)->second;
       current->access_relations = (MemoryAccess **)(malloc(cur_mem_access->size() * sizeof(MemoryAccess *)));
       for (auto v : *cur_mem_access) {
@@ -1658,6 +1660,7 @@ int print_node_content(extTree *node, void *user, int depth){
 int gen_and_sim_addr(extTree *tree, domainSpace *dom){
   char *dump_str;
   unsigned long long addr;
+  int real_ub;
   switch(tree->type) {
     case isl_schedule_node_error:
       break;
@@ -1665,7 +1668,14 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
     //if the index is already in sim_index_map
       // if (sim_index_map.find(tree->ib->index) != sim_index_map.end()){
       // } else {
-      tree->execution_time = tree->ib->ub_val - tree->ib->lb_val + 1;
+      // Not sure why will 0 case happen
+      if (tree->ib->ub_val == -1 || tree->ib->ub_val == 0) {
+        real_ub = sim_index_map[tree->ib->ub];
+        tree->ib->is_gt ? real_ub -= 1 : real_ub = real_ub;
+        tree->execution_time = real_ub - tree->ib->lb_val + 1;
+      } 
+      else
+        tree->execution_time = tree->ib->ub_val - tree->ib->lb_val + 1;
       sim_index_map.insert(std::pair<std::string, int>(tree->ib->index, tree->ib->lb_val));
       // }
       for (int i = 0; i < tree->execution_time; i++){
@@ -1922,15 +1932,15 @@ int main(int argc, char *argv[]) {
     free(unit[i]);
   }
   // Free MemoryAccess->union_map
-  for (auto v : *dom->mem_access) {
-    for (auto q : *v->second) {
-      if (q->type != CONSTANT) isl_union_map_free(q->access);
-    }
-  }
+  // for (auto v : *dom->mem_access) {
+  //   for (auto q : *v->second) {
+  //     if (q->type != CONSTANT) isl_union_map_free(q->access);
+  //   }
+  // }
   // Free dom->stmt->union_set
-  for (int i = 0; i < dom->stmt_num; i++) {
-    isl_union_set_free(dom->stmt[i]->iter_space);
-  }
+  // for (int i = 0; i < dom->stmt_num; i++) {
+  //   isl_union_set_free(dom->stmt[i]->iter_space);
+  // }
   free(unit);
 	fclose(file);
   isl_schedule_free(schedule);
