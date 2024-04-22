@@ -1181,7 +1181,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
       current->depth = isl_schedule_node_get_tree_depth(node);
       // From accessPerStmt in domainSpace find the access of this stmt
       curr_stmt = 0;
-      std::cout << "current->curr_stmt: " << current->curr_stmt << std::endl;
+      // std::cout << "current->curr_stmt: " << current->curr_stmt << std::endl;
       for (auto v : *current->dom->mem_access) {
         if (v->first == current->curr_stmt) {
           break;
@@ -1195,7 +1195,7 @@ isl_bool construction(__isl_keep isl_schedule_node *node, void *upper){
         // So current->curr_stmt is 0
         curr_stmt = 0;
       }
-      std::cout << "curr_stmt: " << curr_stmt << std::endl;
+      // std::cout << "curr_stmt: " << curr_stmt << std::endl;
       cur_mem_access = current->dom->mem_access->at(curr_stmt)->second;
       current->access_relations = (MemoryAccess **)(malloc(cur_mem_access->size() * sizeof(MemoryAccess *)));
       for (auto v : *cur_mem_access) {
@@ -1489,7 +1489,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
               // concat the content to the extracted_part
               extracted_part += str.substr(start_pos, str.length() - start_pos);
             }
-            std::cout << "extracted_part: " << extracted_part << std::endl;
+            // std::cout << "extracted_part: " << extracted_part << std::endl;
             union_map = isl_union_map_read_from_str(ctx, extracted_part.c_str());
             mem->access = union_map;
             mem->arrarName = extractRefName(extracted_part);
@@ -1732,11 +1732,26 @@ int print_node_content(extTree *node, void *user, int depth){
   return 1;
 }
 
+inline void report_miss(int level, int Read, MemoryAccess *ar, Addr addr){
+  if (Read) std::cout << "R ";
+  else std::cout << "W ";
+  std::cout << "Miss at ";
+  if (level == 1) std::cout << "D1: ";
+  else std::cout << "DL: ";
+  // Dump sim_index_map
+  for (auto &v : sim_index_map){
+    std::cout << v.first << ": " << v.second << " ";
+  }
+  printf("\t0x%.10llx", addr);
+  std::cout << "\t" << isl_union_map_to_str(ar->access) << std::endl;
+}
+
 int gen_and_sim_addr(extTree *tree, domainSpace *dom){
   char *dump_str;
   unsigned long long addr;
   int real_ub;
   int real_lb;
+  int prev_d1m, prev_dlm;
   switch(tree->type) {
     case isl_schedule_node_error:
       break;
@@ -1789,10 +1804,22 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
                 + 4 * calc_offset_const_val(ar, tree->dom->array_refs->at(ar->arrarName));
           if (ar->type == WRITE){
             Dw++;
+            prev_d1m = D1mw;
+            prev_dlm = DLmw;
             cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1mw, &DLmw);
+            #ifdef SIM_OBSERVE
+            if (prev_d1m != D1mw) report_miss(1, 0, ar, addr);
+            // if (prev_dlm != DLmw) report_miss(0, 0, ar, addr);
+            #endif
           } else {
             Dr++;
+            prev_d1m = D1mr;
+            prev_dlm = DLmr;
             cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1mr, &DLmr);
+            #ifdef SIM_OBSERVE
+            if (prev_d1m != D1mr) report_miss(1, 1, ar, addr);
+            // if (prev_dlm != DLmr) report_miss(0, 1, ar, addr);
+            #endif
           }
           // printf("ArrayRef %d S%d addr: 0x%.10llx\n",ar->type, tree->curr_stmt,addr);
         } else {
@@ -1977,13 +2004,12 @@ int main(int argc, char *argv[]) {
   // Construct the char array for launching gdb
   get_address_from_gdb(dom->array_refs, sim_prog_path);
   #ifdef DEBUG
-  std::cout << "ArrayRefs: " << std::endl;
   for (auto v : *dom->array_refs){
     std::cout << v.first << std::endl;
     for (auto p : *v.second->var_n_val){
       std::cout << p->first << " : " << p->second << "| ";
     } 
-    printf("start_addr: 0x%.10llx\n", v.second->start_addr);
+    printf(" : 0x%.10llx\n", v.second->start_addr);
   }
   #endif
 
