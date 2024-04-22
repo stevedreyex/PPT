@@ -1,0 +1,56 @@
+domain: "[tsteps, n] -> { S1[t, i, j] : 0 <= t < tsteps and 0 < i <= -2 + n and 0 < j <= -2 + n; S2[t, i, j] : 0 <= t < tsteps and 0 < i <= -2 + n and 0 < j <= -2 + n }"
+child:
+  schedule: "[tsteps, n] -> [{ S1[t, i, j] -> [(t)]; S2[t, i, j] -> [(t)] }]"
+  child:
+    sequence:
+    - filter: "[tsteps, n] -> { S1[t, i, j] }"
+      child:
+        schedule: "[tsteps, n] -> [{ S1[t, i, j] -> [(i)] }, { S1[t, i, j] -> [(j)] }]"
+        permutable: 1
+        coincident: [ 1, 1 ]
+    - filter: "[tsteps, n] -> { S2[t, i, j] }"
+      child:
+        schedule: "[tsteps, n] -> [{ S2[t, i, j] -> [(i)] }, { S2[t, i, j] -> [(j)] }]"
+        permutable: 1
+        coincident: [ 1, 1 ]
+read: [tsteps, n, b0, b1] -> { S1[t, i, j] -> A[i, j] }
+read: [tsteps, n, b0, b1] -> { S1[t, i, j] -> A[i, -1 + j] }
+read: [tsteps, n, b0, b1] -> { S1[t, i, j] -> A[i, 1 + j] }
+read: [tsteps, n, b0, b1] -> { S1[t, i, j] -> A[1 + i, j] }
+read: [tsteps, n, b0, b1] -> { S1[t, i, j] -> A[-1 + i, j] }
+write: [tsteps, n, b0, b1] -> { S1[t, i, j] -> B[i, j] }
+write: [tsteps, n, b0, b1] -> { S2[t, i, j] -> A[i, j] }
+read: [tsteps, n, b0, b1] -> { S2[t, i, j] -> B[i, j] }
+read: [tsteps, n, b0, b1] -> { S2[t, i, j] -> B[i, -1 + j] }
+read: [tsteps, n, b0, b1] -> { S2[t, i, j] -> B[i, 1 + j] }
+read: [tsteps, n, b0, b1] -> { S2[t, i, j] -> B[1 + i, j] }
+read: [tsteps, n, b0, b1] -> { S2[t, i, j] -> B[-1 + i, j] }
+...
+S2
+B[(-1+i),(j)]} 1
+{ S2[t, i, j] -> B[o0, o1] : o0 = -1 + i and o1 = j }
+B[(1+i),(j)]} 1
+{ S2[t, i, j] -> B[o0, o1] : o0 = 1 + i and o1 = j }
+B[(i),(1+j)]} 1
+{ S2[t, i, j] -> B[o0, o1] : o0 = i and o1 = 1 + j }
+B[(i),(-1+j)]} 1
+{ S2[t, i, j] -> B[o0, o1] : o0 = i and o1 = -1 + j }
+B[(i),(j)]} 1
+{ S2[t, i, j] -> B[o0, o1] : o0 = i and o1 = j }
+0.2 2
+A[(i),(j)]} 0
+...
+{ S2[t, i, j] -> A[o0, o1] : o0 = i and o1 = j }
+{ [i] : i = 67358752 or i = 67358752 }
+Test with union map get the string
+{ S1[t, i, j] -> A[o0, o1] : o0 = i and o1 = -1 + j }
+Take out its range
+{ A[i0, i1] }
+Take out its domain
+{ S1[t, i, j] }
+
+From pet_tree domain: "[tsteps, n] -> { S2[t, i, j] : 0 <= t < tsteps and 0 < i <= -2 + n and  0 < j <= -2 + n }"
+Take out its space
+[tsteps, n] -> { S2[t, i, j] : t = 0 and i = 1 and j = 1 and tsteps > 0 and n >= 3 }
+lexmin: "[tsteps, n] -> { S2[t = 0, i = 1, j = 1] : tsteps > 0 and n >= 3 }"
+{ S1[t, i, j] -> A[o0, o1] : o0 = -1 + i and o1 = j }

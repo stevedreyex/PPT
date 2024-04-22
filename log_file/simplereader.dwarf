@@ -1,0 +1,77 @@
+<  0> source file           : "jacobi-2d.c"
+<  0> compilation directory : "/home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind"
+<  1> subprogram            : "__fprintf_chk"
+<  1> file: 2 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/jacobi-2d.c  line 93
+<  1> subprogram            : "free"
+<  1> file: 11 /usr/local/include/valgrind/cachegrind.h  line 555
+<  1> subprogram            : "polybench_alloc_data"
+<  1> file: 7 /usr/include/x86_64-linux-gnu/bits/types/FILE.h  line 231
+<  1> subprogram            : "main"
+<  1> file: 1 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/jacobi-2d.c  line 77
+<  1> low_pc : 0x1636
+<  1> subprogram            : "kernel_jacobi_2d"
+<  1> file: 1 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/jacobi-2d.c  line 57
+<  1> low_pc : 0x12f2
+<  1> subprogram            : "print_array"
+<  1> file: 1 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/jacobi-2d.c  line 38
+<  1> low_pc : 0x150c
+<  1> subprogram            : "init_array"
+<  1> file: 1 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/jacobi-2d.c  line 25
+<  1> low_pc : 0x1269
+<  1> subprogram            : "fprintf"
+<  1> file: 2 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/jacobi-2d.c  line 103
+<  1> subprogram            : "__stack_chk_fail"
+<  1> subprogram            : "__builtin_fwrite"
+<  1> file: 8 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.h  line 0
+<  1> subprogram            : "__builtin_fputc"
+<  1> file: 8 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.h  line 0
+<  0> source file           : "../../../utilities/polybench.c"
+<  0> compilation directory : "/home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind"
+<  1> subprogram            : "__fprintf_chk"
+<  1> file: 2 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.c  line 93
+<  1> subprogram            : "exit"
+<  1> file: 8 /usr/include/stdio.h  line 624
+<  1> subprogram            : "posix_memalign"
+<  1> file: 8 /usr/include/stdio.h  line 586
+<  1> subprogram            : "__printf_chk"
+<  1> file: 2 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.c  line 95
+<  1> subprogram            : "free"
+<  1> file: 8 /usr/include/stdio.h  line 555
+<  1> subprogram            : "__assert_fail"
+<  1> file: 9 /usr/include/stdlib.h  line 69
+<  1> subprogram            : "calloc"
+<  1> file: 8 /usr/include/stdio.h  line 543
+<  1> subprogram            : "polybench_alloc_data"
+<  1> file: 1 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.c  line 557
+<  1> low_pc : 0x18e0
+<  1> subprogram            : "polybench_free_data"
+<  1> file: 1 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.c  line 547
+<  1> low_pc : 0x18ce
+<  1> subprogram            : "xmalloc"
+<  1> file: 1 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.c  line 517
+<  1> low_pc : 0x1758
+<  1> subprogram            : "polybench_timer_print"
+<  1> file: 1 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.c  line 388
+<  1> low_pc : 0x189b
+<  1> subprogram            : "polybench_timer_stop"
+<  1> file: 1 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.c  line 375
+<  1> low_pc : 0x1884
+<  1> subprogram            : "polybench_timer_start"
+<  1> file: 1 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.c  line 364
+<  1> low_pc : 0x185b
+<  1> subprogram            : "polybench_prepare_instruments"
+<  1> file: 1 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.c  line 353
+<  1> low_pc : 0x1844
+<  1> subprogram            : "polybench_flush_cache"
+<  1> file: 1 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.c  line 112
+<  1> low_pc : 0x17d5
+<  1> subprogram            : "rtclock"
+<  1> file: 1 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.c  line 83
+<  1> low_pc : 0x1753
+<  1> subprogram            : "printf"
+<  1> file: 2 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.c  line 110
+<  1> subprogram            : "fprintf"
+<  1> file: 2 /home/dreyex/Documents/Research/PolyBench/stencils/pb4/jacobi-2d-cachegrind/../../../utilities/polybench.c  line 103
+<  1> subprogram            : "__builtin_fwrite"
+<  1> file: 10 /usr/include/assert.h  line 0
+<  1> subprogram            : "__stack_chk_fail"

@@ -1,0 +1,27 @@
+domain: "[n, m] -> { S3[i, j] : 0 <= i < n and 0 <= j < m; S1[i] : 0 <= i < m; S4[i, j] : 0 <= i < n and 0 <= j < m; S2[i] : 0 <= i < n }"
+child:
+  set:
+  - filter: "[n, m] -> { S3[i, j]; S1[i] }"
+    child:
+      schedule: "[n, m] -> [{ S3[i, j] -> [(j)]; S1[i] -> [(i)] }, { S3[i, j] -> [(i)]; S1[i] -> [(0)] }]"
+      permutable: 1
+      coincident: [ 1, 0 ]
+      child:
+        sequence:
+        - filter: "[n, m] -> { S1[i] }"
+        - filter: "[n, m] -> { S3[i, j] }"
+  - filter: "[n, m] -> { S4[i, j]; S2[i] }"
+    child:
+      schedule: "[n, m] -> [{ S4[i, j] -> [(i)]; S2[i] -> [(i)] }, { S4[i, j] -> [(j)]; S2[i] -> [(0)] }]"
+      permutable: 1
+      coincident: [ 1, 0 ]
+      child:
+        sequence:
+        - filter: "[n, m] -> { S2[i] }"
+        - filter: "[n, m] -> { S4[i, j] }"
+read: [n, m, b0] -> { S3[i, j] -> A[i, j] }
+read: [n, m, b0] -> { S3[i, j] -> r[i] }
+write: [n, m, b0] -> { S3[i, j] -> s[j]; S1[i] -> s[i] }
+read: [n, m, b0] -> { S4[i, j] -> A[i, j] }
+read: [n, m, b0] -> { S4[i, j] -> p[j] }
+write: [n, m, b0] -> { S2[i] -> q[i]; S4[i, j] -> q[i] }

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# This script is now deprecated but i'm too lazy to fix it
+
 POSITIONAL=()
 
 REMOTE=false
@@ -34,8 +36,7 @@ if test -f ppcg/autogen.sh; then
 	(cd ppcg; ./autogen.sh)
 fi
 
-./autogen.sh
-cd ./ppcg/isl && bash ../../build_submodule.sh && cd ../..
+cd valgrind && bash ./build_submodule.sh && cd ..
 cd ./ppcg && bash autogen.sh && ./configure && make -j$(nproc) && cd ..
 mkdir install
 ./configure --prefix=`pwd`/install --enable-inner

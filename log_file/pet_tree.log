@@ -1,0 +1,651 @@
+start: 1713
+end: 2719
+indent: '    '
+context: '[n] -> {  : -2147483647 <= n <= 2147483647 }'
+schedule: '{ domain: "[n] -> { S_1[t] : 0 < t <= 40; S_8[t] : 0 < t <= 40; S_13[t,
+  i, j] : 0 < t <= 40 and 0 < i <= -2 + n and 0 < j <= -2 + n; S_3[t, i, j] : 0 <
+  t <= 40 and 0 < i <= -2 + n and 0 < j <= -2 + n; S_12[t, i, j, k] : 0 < t <= 40
+  and 0 < i <= -2 + n and 0 < j <= -2 + n and 0 < k <= -2 + n; S_10[t, i, j] : 0 <
+  t <= 40 and 0 < i <= -2 + n and 0 < j <= -2 + n; S_2[t, i] : 0 < t <= 40 and 0 <
+  i <= -2 + n; S_0[]; S_14[t, i] : 0 < t <= 40 and 0 < i <= -2 + n; S2[t, i, j, k]
+  : 0 < t <= 40 and 0 < i <= -2 + n and 0 < j <= -2 + n and 0 < k <= -2 + n; S_18[];
+  S1[t, i, j, k] : 0 < t <= 40 and 0 < i <= -2 + n and 0 < j <= -2 + n and 0 < k <=
+  -2 + n; S_19[]; S_9[t, i] : 0 < t <= 40 and 0 < i <= -2 + n; S_16[]; S_5[t, i, j,
+  k] : 0 < t <= 40 and 0 < i <= -2 + n and 0 < j <= -2 + n and 0 < k <= -2 + n; S_15[t]
+  : 0 < t <= 40; S_7[t, i] : 0 < t <= 40 and 0 < i <= -2 + n; S_17[]; S_6[t, i, j]
+  : 0 < t <= 40 and 0 < i <= -2 + n and 0 < j <= -2 + n }", child: { sequence: [ {
+  filter: "[n] -> { S_0[] }" }, { filter: "[n] -> { S_1[t]; S_8[t]; S_3[t, i, j];
+  S_12[t, i, j, k]; S_10[t, i, j]; S_2[t, i]; S_14[t, i]; S2[t, i, j, k]; S1[t, i,
+  j, k]; S_9[t, i]; S_5[t, i, j, k]; S_7[t, i]; S_6[t, i, j]; S_13[t, i, j]; S_15[t]
+  }", child: { schedule: "[n] -> L_0[{ S_1[t] -> [(t)]; S_8[t] -> [(t)]; S_3[t, i,
+  j] -> [(t)]; S_12[t, i, j, k] -> [(t)]; S_10[t, i, j] -> [(t)]; S_2[t, i] -> [(t)];
+  S_14[t, i] -> [(t)]; S2[t, i, j, k] -> [(t)]; S1[t, i, j, k] -> [(t)]; S_9[t, i]
+  -> [(t)]; S_5[t, i, j, k] -> [(t)]; S_7[t, i] -> [(t)]; S_6[t, i, j] -> [(t)]; S_13[t,
+  i, j] -> [(t)]; S_15[t] -> [(t)] }]", child: { sequence: [ { filter: "[n] -> { S_1[t]
+  }" }, { filter: "[n] -> { S_3[t, i, j]; S_2[t, i]; S1[t, i, j, k]; S_5[t, i, j,
+  k]; S_7[t, i]; S_6[t, i, j] }", child: { schedule: "[n] -> L_1[{ S_3[t, i, j] ->
+  [(i)]; S_2[t, i] -> [(i)]; S1[t, i, j, k] -> [(i)]; S_5[t, i, j, k] -> [(i)]; S_7[t,
+  i] -> [(i)]; S_6[t, i, j] -> [(i)] }]", child: { sequence: [ { filter: "[n] -> {
+  S_2[t, i] }" }, { filter: "[n] -> { S_3[t, i, j]; S1[t, i, j, k]; S_5[t, i, j, k];
+  S_6[t, i, j] }", child: { schedule: "[n] -> L_2[{ S_3[t, i, j] -> [(j)]; S1[t, i,
+  j, k] -> [(j)]; S_5[t, i, j, k] -> [(j)]; S_6[t, i, j] -> [(j)] }]", child: { sequence:
+  [ { filter: "[n] -> { S_3[t, i, j] }" }, { filter: "[n] -> { S1[t, i, j, k]; S_5[t,
+  i, j, k] }", child: { schedule: "[n] -> L_3[{ S1[t, i, j, k] -> [(k)]; S_5[t, i,
+  j, k] -> [(k)] }]", child: { sequence: [ { filter: "[n] -> { S1[t, i, j, k] }" },
+  { filter: "[n] -> { S_5[t, i, j, k] }" } ] } } }, { filter: "[n] -> { S_6[t, i,
+  j] }" } ] } } }, { filter: "[n] -> { S_7[t, i] }" } ] } } }, { filter: "[n] -> {
+  S_8[t] }" }, { filter: "[n] -> { S_12[t, i, j, k]; S_10[t, i, j]; S2[t, i, j, k];
+  S_14[t, i]; S_9[t, i]; S_13[t, i, j] }", child: { schedule: "[n] -> L_4[{ S_12[t,
+  i, j, k] -> [(i)]; S_10[t, i, j] -> [(i)]; S2[t, i, j, k] -> [(i)]; S_14[t, i] ->
+  [(i)]; S_9[t, i] -> [(i)]; S_13[t, i, j] -> [(i)] }]", child: { sequence: [ { filter:
+  "[n] -> { S_9[t, i] }" }, { filter: "[n] -> { S_12[t, i, j, k]; S_10[t, i, j]; S2[t,
+  i, j, k]; S_13[t, i, j] }", child: { schedule: "[n] -> L_5[{ S_12[t, i, j, k] ->
+  [(j)]; S_10[t, i, j] -> [(j)]; S2[t, i, j, k] -> [(j)]; S_13[t, i, j] -> [(j)] }]",
+  child: { sequence: [ { filter: "[n] -> { S_10[t, i, j] }" }, { filter: "[n] -> {
+  S_12[t, i, j, k]; S2[t, i, j, k] }", child: { schedule: "[n] -> L_6[{ S_12[t, i,
+  j, k] -> [(k)]; S2[t, i, j, k] -> [(k)] }]", child: { sequence: [ { filter: "[n]
+  -> { S2[t, i, j, k] }" }, { filter: "[n] -> { S_12[t, i, j, k] }" } ] } } }, { filter:
+  "[n] -> { S_13[t, i, j] }" } ] } } }, { filter: "[n] -> { S_14[t, i] }" } ] } }
+  }, { filter: "[n] -> { S_15[t] }" } ] } } }, { filter: "[n] -> { S_18[]; S_19[];
+  S_16[]; S_17[] }", child: { set: [ { filter: "{ S_16[] }" }, { filter: "{ S_17[]
+  }" }, { filter: "{ S_18[] }" }, { filter: "{ S_19[] }" } ] } } ] } }'
+arrays:
+- context: '{  :  }'
+  extent: '[n] -> { A[i0, i1, i2] : i0 >= 0 and 0 <= i1 <= 19 and 0 <= i2 <= 19 }'
+  element_type: double
+  element_size: 8
+- context: '{  :  }'
+  extent: '[n] -> { B[i0, i1, i2] : i0 >= 0 and 0 <= i1 <= 19 and 0 <= i2 <= 19 }'
+  element_type: double
+  element_size: 8
+- context: '{  :  }'
+  extent: '{ i[] }'
+  element_type: int
+  element_size: 4
+- context: '{  :  }'
+  extent: '{ j[] }'
+  element_type: int
+  element_size: 4
+- context: '{  :  }'
+  extent: '{ k[] }'
+  element_type: int
+  element_size: 4
+- context: '{  :  }'
+  extent: '{ t[] }'
+  element_type: int
+  element_size: 4
+statements:
+- line: 76
+  domain: '{ S_0[] }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_0[] -> t[] }'
+        reference: __pet_ref_0
+        read: 0
+        write: 1
+      - type: int
+        value: 1
+- line: 77
+  domain: '[n] -> { S_1[t] : 0 < t <= 40 }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_1[t] -> i[] }'
+        reference: __pet_ref_1
+        read: 0
+        write: 1
+      - type: int
+        value: 1
+- line: 78
+  domain: '[n] -> { S_2[t, i] : 0 < t <= 40 and 0 < i <= -2 + n }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_2[t, i] -> j[] }'
+        reference: __pet_ref_2
+        read: 0
+        write: 1
+      - type: int
+        value: 1
+- line: 79
+  domain: '[n] -> { S_3[t, i, j] : 0 < t <= 40 and 0 < i <= -2 + n and 0 < j <= -2
+    + n }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_3[t, i, j] -> k[] }'
+        reference: __pet_ref_3
+        read: 0
+        write: 1
+      - type: int
+        value: 1
+- line: 80
+  domain: '[n] -> { S1[t, i, j, k] : 0 < t <= 40 and 0 < i <= -2 + n and 0 < j <=
+    -2 + n and 0 < k <= -2 + n }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S1[t, i, j, k] -> B[(i), (j), (k)] }'
+        reference: __pet_ref_4
+        read: 0
+        write: 1
+      - type: op
+        operation: +
+        arguments:
+        - type: op
+          operation: +
+          arguments:
+          - type: op
+            operation: +
+            arguments:
+            - type: op
+              operation: '*'
+              arguments:
+              - type: double
+                value: 0.125
+                string: 0.125
+              - type: op
+                operation: +
+                arguments:
+                - type: op
+                  operation: '-'
+                  arguments:
+                  - type: access
+                    index: '[n] -> { S1[t, i, j, k] -> A[(1 + i), (j), (k)] }'
+                    reference: __pet_ref_5
+                    read: 1
+                    write: 0
+                  - type: op
+                    operation: '*'
+                    arguments:
+                    - type: double
+                      value: 2
+                      string: 2.
+                    - type: access
+                      index: '[n] -> { S1[t, i, j, k] -> A[(i), (j), (k)] }'
+                      reference: __pet_ref_6
+                      read: 1
+                      write: 0
+                - type: access
+                  index: '[n] -> { S1[t, i, j, k] -> A[(-1 + i), (j), (k)] }'
+                  reference: __pet_ref_7
+                  read: 1
+                  write: 0
+            - type: op
+              operation: '*'
+              arguments:
+              - type: double
+                value: 0.125
+                string: 0.125
+              - type: op
+                operation: +
+                arguments:
+                - type: op
+                  operation: '-'
+                  arguments:
+                  - type: access
+                    index: '[n] -> { S1[t, i, j, k] -> A[(i), (1 + j), (k)] }'
+                    reference: __pet_ref_8
+                    read: 1
+                    write: 0
+                  - type: op
+                    operation: '*'
+                    arguments:
+                    - type: double
+                      value: 2
+                      string: 2.
+                    - type: access
+                      index: '[n] -> { S1[t, i, j, k] -> A[(i), (j), (k)] }'
+                      reference: __pet_ref_9
+                      read: 1
+                      write: 0
+                - type: access
+                  index: '[n] -> { S1[t, i, j, k] -> A[(i), (-1 + j), (k)] }'
+                  reference: __pet_ref_10
+                  read: 1
+                  write: 0
+          - type: op
+            operation: '*'
+            arguments:
+            - type: double
+              value: 0.125
+              string: 0.125
+            - type: op
+              operation: +
+              arguments:
+              - type: op
+                operation: '-'
+                arguments:
+                - type: access
+                  index: '[n] -> { S1[t, i, j, k] -> A[(i), (j), (1 + k)] }'
+                  reference: __pet_ref_11
+                  read: 1
+                  write: 0
+                - type: op
+                  operation: '*'
+                  arguments:
+                  - type: double
+                    value: 2
+                    string: 2.
+                  - type: access
+                    index: '[n] -> { S1[t, i, j, k] -> A[(i), (j), (k)] }'
+                    reference: __pet_ref_12
+                    read: 1
+                    write: 0
+              - type: access
+                index: '[n] -> { S1[t, i, j, k] -> A[(i), (j), (-1 + k)] }'
+                reference: __pet_ref_13
+                read: 1
+                write: 0
+        - type: access
+          index: '[n] -> { S1[t, i, j, k] -> A[(i), (j), (k)] }'
+          reference: __pet_ref_14
+          read: 1
+          write: 0
+- line: 79
+  domain: '[n] -> { S_5[t, i, j, k] : 0 < t <= 40 and 0 < i <= -2 + n and 0 < j <=
+    -2 + n and 0 < k <= -2 + n }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_5[t, i, j, k] -> k[] }'
+        reference: __pet_ref_15
+        read: 0
+        write: 1
+      - type: access
+        index: '[n] -> { S_5[t, i, j, k] -> [(1 + k)] }'
+        reference: __pet_ref_16
+        read: 1
+        write: 0
+- line: 78
+  domain: '[n] -> { S_6[t, i, j] : 0 < t <= 40 and 0 < i <= -2 + n and 0 < j <= -2
+    + n }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_6[t, i, j] -> j[] }'
+        reference: __pet_ref_17
+        read: 0
+        write: 1
+      - type: access
+        index: '[n] -> { S_6[t, i, j] -> [(1 + j)] }'
+        reference: __pet_ref_18
+        read: 1
+        write: 0
+- line: 77
+  domain: '[n] -> { S_7[t, i] : 0 < t <= 40 and 0 < i <= -2 + n }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_7[t, i] -> i[] }'
+        reference: __pet_ref_19
+        read: 0
+        write: 1
+      - type: access
+        index: '[n] -> { S_7[t, i] -> [(1 + i)] }'
+        reference: __pet_ref_20
+        read: 1
+        write: 0
+- line: 84
+  domain: '[n] -> { S_8[t] : 0 < t <= 40 }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_8[t] -> i[] }'
+        reference: __pet_ref_21
+        read: 0
+        write: 1
+      - type: int
+        value: 1
+- line: 85
+  domain: '[n] -> { S_9[t, i] : 0 < t <= 40 and 0 < i <= -2 + n }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_9[t, i] -> j[] }'
+        reference: __pet_ref_22
+        read: 0
+        write: 1
+      - type: int
+        value: 1
+- line: 86
+  domain: '[n] -> { S_10[t, i, j] : 0 < t <= 40 and 0 < i <= -2 + n and 0 < j <= -2
+    + n }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_10[t, i, j] -> k[] }'
+        reference: __pet_ref_23
+        read: 0
+        write: 1
+      - type: int
+        value: 1
+- line: 87
+  domain: '[n] -> { S2[t, i, j, k] : 0 < t <= 40 and 0 < i <= -2 + n and 0 < j <=
+    -2 + n and 0 < k <= -2 + n }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S2[t, i, j, k] -> A[(i), (j), (k)] }'
+        reference: __pet_ref_24
+        read: 0
+        write: 1
+      - type: op
+        operation: +
+        arguments:
+        - type: op
+          operation: +
+          arguments:
+          - type: op
+            operation: +
+            arguments:
+            - type: op
+              operation: '*'
+              arguments:
+              - type: double
+                value: 0.125
+                string: 0.125
+              - type: op
+                operation: +
+                arguments:
+                - type: op
+                  operation: '-'
+                  arguments:
+                  - type: access
+                    index: '[n] -> { S2[t, i, j, k] -> B[(1 + i), (j), (k)] }'
+                    reference: __pet_ref_25
+                    read: 1
+                    write: 0
+                  - type: op
+                    operation: '*'
+                    arguments:
+                    - type: double
+                      value: 2
+                      string: 2.
+                    - type: access
+                      index: '[n] -> { S2[t, i, j, k] -> B[(i), (j), (k)] }'
+                      reference: __pet_ref_26
+                      read: 1
+                      write: 0
+                - type: access
+                  index: '[n] -> { S2[t, i, j, k] -> B[(-1 + i), (j), (k)] }'
+                  reference: __pet_ref_27
+                  read: 1
+                  write: 0
+            - type: op
+              operation: '*'
+              arguments:
+              - type: double
+                value: 0.125
+                string: 0.125
+              - type: op
+                operation: +
+                arguments:
+                - type: op
+                  operation: '-'
+                  arguments:
+                  - type: access
+                    index: '[n] -> { S2[t, i, j, k] -> B[(i), (1 + j), (k)] }'
+                    reference: __pet_ref_28
+                    read: 1
+                    write: 0
+                  - type: op
+                    operation: '*'
+                    arguments:
+                    - type: double
+                      value: 2
+                      string: 2.
+                    - type: access
+                      index: '[n] -> { S2[t, i, j, k] -> B[(i), (j), (k)] }'
+                      reference: __pet_ref_29
+                      read: 1
+                      write: 0
+                - type: access
+                  index: '[n] -> { S2[t, i, j, k] -> B[(i), (-1 + j), (k)] }'
+                  reference: __pet_ref_30
+                  read: 1
+                  write: 0
+          - type: op
+            operation: '*'
+            arguments:
+            - type: double
+              value: 0.125
+              string: 0.125
+            - type: op
+              operation: +
+              arguments:
+              - type: op
+                operation: '-'
+                arguments:
+                - type: access
+                  index: '[n] -> { S2[t, i, j, k] -> B[(i), (j), (1 + k)] }'
+                  reference: __pet_ref_31
+                  read: 1
+                  write: 0
+                - type: op
+                  operation: '*'
+                  arguments:
+                  - type: double
+                    value: 2
+                    string: 2.
+                  - type: access
+                    index: '[n] -> { S2[t, i, j, k] -> B[(i), (j), (k)] }'
+                    reference: __pet_ref_32
+                    read: 1
+                    write: 0
+              - type: access
+                index: '[n] -> { S2[t, i, j, k] -> B[(i), (j), (-1 + k)] }'
+                reference: __pet_ref_33
+                read: 1
+                write: 0
+        - type: access
+          index: '[n] -> { S2[t, i, j, k] -> B[(i), (j), (k)] }'
+          reference: __pet_ref_34
+          read: 1
+          write: 0
+- line: 86
+  domain: '[n] -> { S_12[t, i, j, k] : 0 < t <= 40 and 0 < i <= -2 + n and 0 < j <=
+    -2 + n and 0 < k <= -2 + n }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_12[t, i, j, k] -> k[] }'
+        reference: __pet_ref_35
+        read: 0
+        write: 1
+      - type: access
+        index: '[n] -> { S_12[t, i, j, k] -> [(1 + k)] }'
+        reference: __pet_ref_36
+        read: 1
+        write: 0
+- line: 85
+  domain: '[n] -> { S_13[t, i, j] : 0 < t <= 40 and 0 < i <= -2 + n and 0 < j <= -2
+    + n }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_13[t, i, j] -> j[] }'
+        reference: __pet_ref_37
+        read: 0
+        write: 1
+      - type: access
+        index: '[n] -> { S_13[t, i, j] -> [(1 + j)] }'
+        reference: __pet_ref_38
+        read: 1
+        write: 0
+- line: 84
+  domain: '[n] -> { S_14[t, i] : 0 < t <= 40 and 0 < i <= -2 + n }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_14[t, i] -> i[] }'
+        reference: __pet_ref_39
+        read: 0
+        write: 1
+      - type: access
+        index: '[n] -> { S_14[t, i] -> [(1 + i)] }'
+        reference: __pet_ref_40
+        read: 1
+        write: 0
+- line: 76
+  domain: '[n] -> { S_15[t] : 0 < t <= 40 }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: =
+      arguments:
+      - type: access
+        index: '[n] -> { S_15[t] -> t[] }'
+        reference: __pet_ref_41
+        read: 0
+        write: 1
+      - type: access
+        index: '[n] -> { S_15[t] -> [(1 + t)] }'
+        reference: __pet_ref_42
+        read: 1
+        write: 0
+- line: -1
+  domain: '{ S_16[] }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: kill
+      arguments:
+      - type: access
+        killed: '[n] -> { S_16[] -> t[] }'
+        index: '[n] -> { S_16[] -> t[] }'
+        reference: __pet_ref_43
+        kill: 1
+- line: -1
+  domain: '{ S_17[] }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: kill
+      arguments:
+      - type: access
+        killed: '[n] -> { S_17[] -> i[] }'
+        index: '[n] -> { S_17[] -> i[] }'
+        reference: __pet_ref_44
+        kill: 1
+- line: -1
+  domain: '{ S_18[] }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: kill
+      arguments:
+      - type: access
+        killed: '[n] -> { S_18[] -> j[] }'
+        index: '[n] -> { S_18[] -> j[] }'
+        reference: __pet_ref_45
+        kill: 1
+- line: -1
+  domain: '{ S_19[] }'
+  body:
+    type: expression
+    expr:
+      type: op
+      operation: kill
+      arguments:
+      - type: access
+        killed: '[n] -> { S_19[] -> k[] }'
+        index: '[n] -> { S_19[] -> k[] }'
+        reference: __pet_ref_46
+        kill: 1
+
+
+
+
+ArrayRef 1 S1 addr: 0x55555555a058
+Constant addr: 0x00000010a00c
+ArrayRef 1 S1 addr: 0x55555555a058
+Constant addr: 0x00000010a00c
+ArrayRef 1 S1 addr: 0x55555555a058
+Constant addr: 0x00000010a00c
+ArrayRef 1 S1 addr: 0x55555555a05c
+ArrayRef 1 S1 addr: 0x55555555a0a8
+ArrayRef 1 S1 addr: 0x55555555a05c
+ArrayRef 1 S1 addr: 0x55555555a054
+ArrayRef 1 S1 addr: 0x55555555a008
+ArrayRef 1 S1 addr: 0x55555555a054
+Constant addr: 0x00000010a00c
+Constant addr: 0x00000010a00c
+Constant addr: 0x00000010a00c
+ArrayRef 1 S1 addr: 0x55555555a058
+ArrayRef 0 S1 addr: 0x555555562694
+
+**293058** & R 80 0x0004038cd4 4
+**293058** & R 80 0x0004038694 4
+**293058** & R 80 0x0004038054 4
+**293058** & R 80 0x000010a008 4
+**293058** & R 80 0x00040386e4 4
+**293058** & R 80 0x0004038644 4
+**293058** & R 80 0x0004038698 4
+**293058** & R 80 0x0004038690 4
+**293058** & W 80 0x0004040694 4
