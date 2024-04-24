@@ -6,8 +6,9 @@ data_size=SMALL_DATASET
 # src is the main directory of the benchmark
 src=/home/dreyex/Documents/Research/TraceBench
 # dst is the directory where the traces will be saved
-dst=/home/dreyex/use_this
-ppcg_bin=`pwd`/ppcg/install/bin
+dst=/home/dreyex/use_that
+benchmark=./benchmark_list_an5d
+ppcg_bin=`pwd`/../ppcg/install/bin
 now=""
 
 # Function to get the current time in milliseconds
@@ -27,20 +28,20 @@ calculate_elapsed_time() {
 # Time to generate the trace for simulation
 run_test_a() {
     local item_basename=$1
-    ./vg-in-place --tool=cachegrind --instr-at-start=no --cache-sim=yes --D1=49152,12,64 --I1=32768,8,64 --L2=1310720,10,64 -v --cachegrind-out-file="cachegrind.out.$item_basename" --log-fd=1  $dst/obj/$item_basename | grep -v "-" | grep -v "=" >  $dst/trace/$item_basename.log
+    ../valgrind/vg-in-place --tool=cachegrind --instr-at-start=no --cache-sim=yes --D1=49152,12,64 --I1=32768,8,64 --L2=1310720,10,64 -v --cachegrind-out-file="cachegrind.out.$item_basename" --log-fd=1  $dst/obj/$item_basename | grep -v "-" | grep -v "=" >  $dst/trace/$item_basename.log
     mv cachegrind.out.$now $dst/trace
 }
 
 # Simulation the trace in the CoreSim LRU
 run_test_b() {
     local item_basename=$1
-    ./CoreSim $dst/trace/$item_basename.log
+    ../src/CoreSim $dst/trace/$item_basename.log
 }
 
 # Use polyhedral trace to simulate the trace instead of test_a and test_b
 run_test_c() {
     local item_basename=$1
-    ./CorePPT $dst/obj/$item_basename $ppcg_bin -D$data_size
+    ../src/CorePPT $dst/obj/$item_basename $ppcg_bin -D$data_size
 }
 
 # Initialize arrays to store test timings
@@ -74,6 +75,7 @@ while IFS= read -r i; do
 
     start_time=$(get_current_time)
     test_result=("$(run_test_c $now)")
+    echo $test_result
     finish_time=$(get_current_time)
     elapsed_time=$(calculate_elapsed_time "$start_time" "$finish_time")
     echo "Finish generating trace for $now with $elapsed_time seconds."
@@ -81,7 +83,7 @@ while IFS= read -r i; do
 
     printf "%s %s %s %s\n" "$now" "$test_a_timings" "$test_b_timings" "$test_c_timings" >> timings.dat
 
-done < benchmark_list
+done < $benchmark
 
 du -sH $dst/trace/* | sort -n
 rm -rf *.cu *.hu
@@ -100,4 +102,6 @@ gnuplot <<- EOF
     plot 'timings.dat' using 2:xtic(1) title "Test A", '' using 3 title "Test B", '' using 4 title "Test C"
 EOF
 
-echo "Plot generated: benchmark_plot.png"
+mv benchmark_plot.png timings.dat ../log_file
+
+echo "Plot generated: benchmark_plot.png in ../log_file"

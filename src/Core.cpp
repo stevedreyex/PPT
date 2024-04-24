@@ -33,6 +33,7 @@ char *exe_prog_path;  // argv[2]
 char *pet_prog_args;  // argv[3]
 std::vector<std::pair<const char *, int>> var_n_val;
 std::unordered_map<std::string, int> sim_index_map;
+std::set<std::string> constval_counter = {};
 
 typedef std::uint64_t hash_t;
 typedef unsigned long long int ULong;
@@ -122,6 +123,7 @@ typedef struct{
 typedef struct{
     int indent;
     int lineno;
+    Addr constAddr;
     accessType type;
     std::string arrarName;
     isl_union_map *access;
@@ -967,6 +969,7 @@ int calc_dom_bound(domainSpace *dom) {
 
 int calc_offset_const_val(MemoryAccess *access, ArrayRef *ar) {
   int start_pos = 0;
+  int end_pos = 0;
   long int temp_val = 0;
   long int val = 0;
   char *endptr;
@@ -974,6 +977,7 @@ int calc_offset_const_val(MemoryAccess *access, ArrayRef *ar) {
   start_pos = access_str.find("[");
   start_pos = access_str.find("[", start_pos + 1);
   std::list<std::string> tokens;
+  std::list<std::string> conditions;
   std::vector<std::string> items;
   std::string *parse_arget;
   std::string token;
@@ -981,6 +985,7 @@ int calc_offset_const_val(MemoryAccess *access, ArrayRef *ar) {
   int size_dim = 1;
   // Already in the array access
   tokens = split(access_str.substr(start_pos, access_str.length() - start_pos), ',', "[", "]");
+  conditions = split_by_str(access_str.substr(start_pos, access_str.length() - start_pos), "and", ":", "}");
   for (auto t : tokens){
     items.clear();
     parse_arget = new std::string(t);
@@ -1001,10 +1006,29 @@ int calc_offset_const_val(MemoryAccess *access, ArrayRef *ar) {
           continue;
         } else {
           // Might have subsitution
-          temp_val += sim_index_map[it];
-        }
-      } 
-      // printf("scan %s, temp_val: %ld, val: %ld\n", it.c_str(), temp_val, val);
+          try {
+            temp_val += sim_index_map.at(it);
+          } 
+          catch(const std::exception& e) {
+            // std::cerr << e.what() << '\n';
+            for (auto c : conditions){
+              if (c.find(it) != std::string::npos && c.find("mod") != std::string::npos){
+                for (auto m : sim_index_map){
+                  if (c.find(m.first) != std::string::npos){
+                    // std::cout << "found: " << m.first << std::endl;
+                    // This is cheating
+                    temp_val += m.second;
+                    if (c.find("1") != std::string::npos) temp_val++;
+                    temp_val %= 2;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        } 
+        // printf("scan %s, temp_val: %ld, val: %ld\n", it.c_str(), temp_val, val);
+      }
     }
     if (size_dim < ar->var_n_val->size()) {
       temp_val *= ar->var_n_val->at(size_dim)->second;
@@ -1445,6 +1469,8 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
         char access[BUFFER_SIZE]; // Adjust size based on your needs
 
         // Skip leading whitespace using "%*s"
+        // Case stmt is at pet tree last consider break of segfault
+        if (pet_tree[i].size() == 0) break;
         sscanf(pet_tree[i].c_str(), "%*s%*[:]");
 
         // Read "type:" and the expression
@@ -1469,6 +1495,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
         int is_also_write = 0;
         int has_val = 0;
         int bound_val = 0;
+        char *endptr;
 
         switch(hash_(expression)){
           case  hash_compile_time( "access" ): 
@@ -1477,19 +1504,25 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
             // get the union map of access, find the first pos of ':'
             str = pet_tree[i];
             start_pos = str.find("{");
+            while (start_pos == std::string::npos){
+              i++;
+              str = pet_tree[i];
+              start_pos = str.find("{");
+            }
+            extracted_part = str.substr(start_pos, str.length() - start_pos);
             end_pos = str.find("}");
-            extracted_part = str.substr(start_pos, end_pos - start_pos+1);
-            if (end_pos == std::string::npos) {
+            // std::cout << "str: " << str << std::endl;
+            while (end_pos == std::string::npos) {
               // The content is at the next line, but the next line starts with space
               // remove the space after concat to the extracted_part
               i++;
               str = pet_tree[i];
               start_pos = 0;
-              while (str[start_pos] != ' ') start_pos++;
+              while (str[start_pos] == ' ') start_pos++;
               // concat the content to the extracted_part
               extracted_part += str.substr(start_pos, str.length() - start_pos);
+              end_pos = str.find("}");
             }
-            // std::cout << "extracted_part: " << extracted_part << std::endl;
             union_map = isl_union_map_read_from_str(ctx, extracted_part.c_str());
             mem->access = union_map;
             mem->arrarName = extractRefName(extracted_part);
@@ -1497,7 +1530,13 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
               if (established_map[mem->arrarName] == 1) goto already_established;
               else established_map[mem->arrarName] = 1; // Not established before
             } 
-            /* extracted part like Sn[index] -> arr[ subscript ] */
+            /*
+             * Extract each dimension of the array subscript
+             * We want to linearize it to a 1d array
+             * From here, an individual array is only constructed once
+            
+             * extracted part like Sn[index] -> arr[ subscript ] 
+             */
             start_pos = str.find("->");
             start_pos = str.find("->", start_pos + 1);
             start_pos = str.find(mem->arrarName, start_pos + 1);
@@ -1512,6 +1551,24 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
               // std::cout << "nn: " << nn << std::endl;
               nn.erase(0, 1);
               nn.erase(nn.size() - 1, 1);
+              start_pos = nn.find("mod");
+              if (start_pos != std::string::npos) {
+                for (int i = 0; i < dom->stmt[curr_stmt-1]->ib_num; i++){
+                  if (std::string(nn).find(dom->stmt[curr_stmt-1]->names[i]) != std::string::npos) {
+                    ib_name = (char *)(malloc(10));
+                    strcpy(ib_name, dom->stmt[curr_stmt-1]->names[i]);
+                    break;
+                  }
+                }
+                // sth like ((1 + t) mod 2), we want to extract that 2
+                nn.erase(0, start_pos + 4);
+                bound_val = strtol ( nn.c_str() , &endptr , 10 ) ;
+                strcat(ib_name, " % ");
+                strcat(ib_name, std::to_string(bound_val).c_str());
+                // std::cout << "bound_val: " << bound_val << "nn" << nn << std::endl;
+                auto pair = new std::pair<const char *, int>(ib_name, bound_val);
+                if (pair) map->at(mem->arrarName)->var_n_val->push_back(pair);
+              }
               ib = find_index_bound_from_stmt(dom, curr_stmt, nn);
               if (!ib) continue;
               // find item from unordered_map and push it to the var_n_val
@@ -1557,6 +1614,8 @@ already_established:
             i++;
             sscanf(pet_tree[i].c_str(), "%[^:]%*[: ]%s", type, expression);
             mem->arrarName = expression;
+            constval_counter.insert(mem->arrarName);
+            mem->constAddr = 0x000010a008 + constval_counter.size() * 4;
             // if it is a 0 then ignore
             if (!strcmp(expression, "0")) break;
             maPair->second->push_back(mem);
@@ -1824,7 +1883,7 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
           // printf("ArrayRef %d S%d addr: 0x%.10llx\n",ar->type, tree->curr_stmt,addr);
         } else {
           // Constant access
-          addr = 0x000010a00c;
+          addr = ar->constAddr;
           Dr++;
           cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1mr, &DLmr);
           // printf("Constant addr: 0x%.12llx\n", addr);
