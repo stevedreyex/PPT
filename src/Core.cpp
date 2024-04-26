@@ -31,6 +31,8 @@
 char *sim_prog_path;  // argv[1]
 char *exe_prog_path;  // argv[2]
 char *pet_prog_args;  // argv[3]
+int regression_smaple_pt; // argv[4]
+std::vector<std::pair<int, int>> D1_regression_sample;
 std::vector<std::pair<const char *, int>> var_n_val;
 std::unordered_map<std::string, int> sim_index_map;
 std::set<std::string> constval_counter = {};
@@ -64,8 +66,9 @@ static cache_t2 LL;
 static cache_t2 I1;
 static cache_t2 D1;
 
-ULong D1mr = 0, DLmr = 0;
-ULong D1mw = 0, DLmw = 0;
+// ULong D1mr = 0, DLmr = 0;
+// ULong D1mw = 0, DLmw = 0;
+ULong D1m = 0, DLm = 0;
 ULong Dr = 0, Dw = 0;
   
 hash_t hash_( char const * str)   
@@ -1038,6 +1041,32 @@ int calc_offset_const_val(MemoryAccess *access, ArrayRef *ar) {
   return temp_val;
 }
 
+int calc_and_fit_regression_model(int x){
+  // a y = ax + b linear regression model, return result after fitting
+  double sumx = 0, sumy = 0, sumxy = 0, sumx2 = 0, sumy2 = 0;
+  int n = D1_regression_sample.size();
+  // Dump the D1_regression_sample in one line
+  for(auto p : D1_regression_sample){
+    std::cout << "<" << p.first << " " << p.second << "> " ;
+  }std::cout << std::endl;
+
+  for(auto p : D1_regression_sample){
+    sumx += p.first;
+    sumy += p.second;
+    sumxy += p.first * p.second;
+    sumx2 += p.first * p.first;
+    sumy2 += p.second * p.second;
+  }
+
+  // and then...?
+  double a = (n * sumxy - sumx * sumy) / (n * sumx2 - sumx * sumx);
+  double b = (sumy * sumx2 - sumx * sumxy) / (n * sumx2 - sumx * sumx);
+
+  // Calculate the result for the given x
+  std::cout << floor(a * x + b) + 1 << " = " << a << " * " << x << " + " << b << std::endl; 
+  return floor(a * x + b) + 1;
+}
+
 indexBound *find_index_bound_from_stmt(domainSpace *dom, int stmt_no, std::string index) {
   for (int i = 0; i < dom->stmt_num; i++) {
     if (dom->stmt[i]->stmt_no == stmt_no) {
@@ -1811,6 +1840,7 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
   int real_ub;
   int real_lb;
   int prev_d1m, prev_dlm;
+  int is_regression_dim = 1;
   switch(tree->type) {
     case isl_schedule_node_error:
       break;
@@ -1832,11 +1862,40 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
         tree->execution_time = tree->ib->ub_val - tree->ib->lb_val + 1;
       sim_index_map.insert(std::pair<std::string, int>(tree->ib->index, tree->ib->lb_val));
       // }
-      for (int i = 0; i < tree->execution_time; i++){
-        // std::cout << "index: " << tree->ib->index << " value: " << sim_index_map[tree->ib->index] << std::endl;
-        gen_and_sim_addr(tree->children[0], dom);
-        sim_index_map[tree->ib->index]++;
+      // Is this a dimension that can use linear regression method?
+      // We can now only do the regression on the dimension that is not used by arr ref
+      for (auto v : *dom->array_refs){
+        for (auto p : *v.second->var_n_val){  
+          if (!strcmp(p->first, tree->ib->index)){
+            // std::cout << "p->first: " << p->first << " tree->ib->index: " << tree->ib->index << std::endl;
+            is_regression_dim = 0;
+            break;
+          }
+        } 
       }
+      #ifdef REGRESSION
+      if (is_regression_dim){
+        std::cout << "Regression on " << tree->ib->index << std::endl;
+        D1_regression_sample.clear();
+        for (int i = 0; i < regression_smaple_pt; i++){
+          gen_and_sim_addr(tree->children[0], dom);
+          sim_index_map[tree->ib->index]++;
+          D1_regression_sample.push_back(std::make_pair(i+1, D1m));
+        }
+        D1m = calc_and_fit_regression_model(tree->execution_time);
+      } else {
+        for (int i = 0; i < tree->execution_time; i++){
+          gen_and_sim_addr(tree->children[0], dom);
+          sim_index_map[tree->ib->index]++;
+        }
+      }
+      #else
+        for (int i = 0; i < tree->execution_time; i++){
+          // std::cout << "index: " << tree->ib->index << " value: " << sim_index_map[tree->ib->index] << std::endl;
+          gen_and_sim_addr(tree->children[0], dom);
+          sim_index_map[tree->ib->index]++;
+        }
+      #endif
       sim_index_map.erase(tree->ib->index);
       tree->execution_time = 0;
       break;
@@ -1863,20 +1922,18 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
                 + 4 * calc_offset_const_val(ar, tree->dom->array_refs->at(ar->arrarName));
           if (ar->type == WRITE){
             Dw++;
-            prev_d1m = D1mw;
-            prev_dlm = DLmw;
-            cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1mw, &DLmw);
+            prev_d1m = D1m;
+            cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1m, &DLm);
             #ifdef SIM_OBSERVE
-            if (prev_d1m != D1mw) report_miss(1, 0, ar, addr);
+            if (prev_d1m != D1m) report_miss(1, 0, ar, addr);
             // if (prev_dlm != DLmw) report_miss(0, 0, ar, addr);
             #endif
           } else {
             Dr++;
-            prev_d1m = D1mr;
-            prev_dlm = DLmr;
-            cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1mr, &DLmr);
+            prev_d1m = D1m;
+            cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1m, &DLm);
             #ifdef SIM_OBSERVE
-            if (prev_d1m != D1mr) report_miss(1, 1, ar, addr);
+            if (prev_d1m != D1m) report_miss(1, 1, ar, addr);
             // if (prev_dlm != DLmr) report_miss(0, 1, ar, addr);
             #endif
           }
@@ -1885,7 +1942,7 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
           // Constant access
           addr = ar->constAddr;
           Dr++;
-          cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1mr, &DLmr);
+          cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1m, &DLm);
           // printf("Constant addr: 0x%.12llx\n", addr);
         }
       }
@@ -1915,6 +1972,7 @@ int main(int argc, char *argv[]) {
   sim_prog_path = argv[1];
   exe_prog_path = argv[2];
   pet_prog_args = argv[3];
+  regression_smaple_pt = atoi(argv[4]);
   int status = 0;
   std::cout << "Simulate the program: " << sim_prog_path << std::endl;
 
@@ -2089,8 +2147,11 @@ int main(int argc, char *argv[]) {
   cachesim_initcaches(D1c, LLc);
   status = gen_and_sim_addr(tree, dom);
 
-  printf("Dr: %llu, D1mr: %llu, DLmr: %llu\n", Dr, D1mr, DLmr);
-  printf("Dw: %llu, D1mw: %llu, DLmw: %llu\n", Dw, D1mw, DLmw);
+  // printf("Dr: %llu, D1mr: %llu, DLmr: %llu\n", Dr, D1mr, DLmr);
+  // printf("Dw: %llu, D1mw: %llu, DLmw: %llu\n", Dw, D1mw, DLmw);
+
+
+  printf("Dr: %llu, D1m: %llu, DLm: %llu\n", Dr, D1m, DLm);
 
   // Free the array of ptr
   for (int i = 0; i < compilation_unit; i++) {
