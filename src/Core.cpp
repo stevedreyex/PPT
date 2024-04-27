@@ -1676,25 +1676,33 @@ int get_address_from_gdb(std::unordered_map<std::string, ArrayRef *>  *ar, char 
   FILE *fp;
   fp = popen(gdb_args, "r");
   char out[BUFFER_SIZE];
-  std::vector<unsigned long long> *addr = new std::vector<unsigned long long>();
+  std::vector<std::pair<int, unsigned long long>> addr; // Avoid dynamic allocation
+  int counter = 0;
   while (fgets(out, sizeof(out), fp) != NULL) {
-    if (out[0] == '$') {
-      // Be like this form: $1 = (float (*)[50]) 0x55555555a000
-      // Find the first "0x"
-      size_t start_pos = std::string(out).find("0x");
-      if (start_pos == std::string::npos) {
-        addr->push_back(0);
-        continue;
-      } else {
-        // 14 characters after "0x" is the address
-        addr->push_back(std::stoull(std::string(out).substr(start_pos + 2, 14), 0, 16));
+      if (out[0] == '$') {
+          // Be like this form: $1 = (float (*)[50]) 0x55555555a000
+          // Find the first "0x"
+          size_t start_pos = std::string(out).find("0x");
+          if (start_pos != std::string::npos) {
+              // 14 characters after "0x" is the address
+              addr.push_back(std::make_pair(counter, std::stoull(std::string(out).substr(start_pos + 2, 14), 0, 16)));
+          }
+        counter++;
       }
-
-    }
   }
-  for(auto v : *ar){
-    v.second->start_addr = addr->front();
-    addr->erase(addr->begin());
+  counter = 0;
+  for (auto a : addr){
+    std::cout << a.first << " " << a.second << std::endl ;
+  }
+  if (!addr.empty()) {
+    for (auto& v : *ar) {
+      for (auto a : addr){
+        if(counter == a.first){
+          v.second->start_addr = a.second;    
+        }
+      }
+      counter++;
+    }
   }
 
   pclose(fp);
