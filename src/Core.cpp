@@ -1299,7 +1299,7 @@ std::string extractRefName(const std::string& str) {
   return content;
 }
 
-int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, char **unit, int compilation_unit) {
+std::vector<std::pair<int, int> *> * get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, char **unit, int compilation_unit) {
   char arg_list[BUFFER_SIZE] = {0};
   char pet_call[BUFFER_SIZE] = {0};
   const char *incl = "-I";
@@ -1329,7 +1329,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
   // push pet_fp content line by line into pet_tree
   if (pet_fp == NULL) {
     printf("Failed to run command\n");
-    return 1;
+    return NULL;
   } 
   size_t line_length = 0;
 
@@ -1341,7 +1341,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
   // push source content line by line into source_code
   if(!source.is_open()){
     printf("Failed to run command\n");
-    return 1;
+    return NULL;
   }
   while(getline(source, line)){
       source_code.push_back(line);
@@ -1464,7 +1464,7 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
         }
         // Get the type of the statement
         // For example: "    type: expression" -> "expression"
-        char type[20]; // Adjust size based on your needs
+        char type[100]; // Adjust size based on your needs
         char expression[100]; // Adjust size based on your needs
         char access[BUFFER_SIZE]; // Adjust size based on your needs
 
@@ -1489,6 +1489,9 @@ int get_access_relation_from_pet(domainSpace *dom, accessPerStmt *mem_access, ch
         std::list<std::string> tokens;
         mem = new MemoryAccess();
         mem->indent = s.find("- type");
+        // if (mem->indent == -1) {
+        //   std::cout << "Wrong indent in: " << pet_tree[i] << std::endl;
+        // }
         mem->lineno = i;
         char *ib_name;
         int is_read = 0;
@@ -1633,20 +1636,32 @@ end:
       found = 0;
       // reverse the vector in pair->second
       sort(maPair->second->begin(), maPair->second->end() , [](const MemoryAccess* a, const MemoryAccess* b) {
-          // READ before WRITE
+          // READ 1 / CONST 2 before WRITE 0
+          // 1 and 2 don't swap
+
+          // this case is for same object but have both read and write
           if (a->indent == b->indent && a->lineno == b->lineno) return a->type > b->type;
           if (a->indent != b->indent){
               return a->indent > b->indent;
           } else {
-              return a->lineno > b->lineno;
+              return a->lineno < b->lineno;
           }
       });
       mem_access->push_back(maPair);
+      // Dump the mem_access
+      // std::cout << "ROUND" << std::endl;
+      // for (auto &v : *maPair->second){
+      //   std::cout << "stmt: " << maPair->first << " type: " << v->type << " lineno: " << v->lineno << " indent: " << v->indent << std::endl;
+      // }
     }
   }
 
+  std::vector<std::pair<int, int> *> *pet_tree_tag_return = new std::vector<std::pair<int, int> *>();
+  for (auto &v : pet_tree_tag){
+    pet_tree_tag_return->push_back(v);
+  }
   pclose(pet_fp);
-  return 1;
+  return pet_tree_tag_return;
 }
 
 int get_address_from_gdb(std::unordered_map<std::string, ArrayRef *>  *ar, char * sim_prog_path){
@@ -1691,9 +1706,7 @@ int get_address_from_gdb(std::unordered_map<std::string, ArrayRef *>  *ar, char 
       }
   }
   counter = 0;
-  for (auto a : addr){
-    std::cout << a.first << " " << a.second << std::endl ;
-  }
+
   if (!addr.empty()) {
     for (auto& v : *ar) {
       for (auto a : addr){
@@ -1913,6 +1926,60 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
   return 1;
 }
 
+void diff_result(std::vector<std::pair<int, int> *> *pet_tree_tag){
+  char result[BUFFER_SIZE/4];
+  strcpy(result, sim_prog_path);
+  char newSubstr[] = "/trace/cachegrind.out.";
+  replaceString(result, "/obj/", newSubstr);
+
+  FILE *fp;
+  fp = fopen(result, "r");
+  if (!fp) {
+    printf("Failed to open %s\n", result);
+    return;
+  }
+  // Dr D1Mr DLmr Dw D1Mw DLmw
+  unsigned long long local[6] = {0, 0, 0, 0, 0, 0};
+  unsigned long long temp[6] = {0, 0, 0, 0, 0, 0};
+  unsigned long long total[6] = {Dr, D1mr, DLmr, Dw, D1mw, DLmw};
+
+  char *line_ch = NULL;
+  size_t line_length = 0;
+  int start_parse = 0;
+  int line_no;
+
+  while (getline(&line_ch, &line_length, fp) != -1) {
+    // line_ch have "fn" then is starts from the next line
+    if (line_ch[0] == 'f' && line_ch[1] == 'n')  start_parse = 1;
+    if (line_ch[0] == 's') start_parse = 0;
+    if (start_parse){
+      sscanf(line_ch, "%d %*llu %*llu %*llu %llu %llu %llu %llu %llu %llu", &line_no, &temp[0], &temp[1], &temp[2], &temp[3], &temp[4], &temp[5]);
+      // find the line_no in pet_tree_tag->first
+      auto it = std::find_if(pet_tree_tag->begin(), pet_tree_tag->end(), [line_no](std::pair<int, int> *p) {
+        if (p->second == line_no) return true;
+        return false;
+      });
+      if (it != pet_tree_tag->end()){
+        for (int i = 0; i < 6; i++){
+          local[i] += temp[i];
+        }
+      }
+    }
+  }
+  // Dump local
+  printf("local: \t");
+  for (int i = 0; i < 6; i++){
+    printf("%llu ", local[i]);
+  }
+
+  printf("\nerror rate: ");
+  for (int i = 0; i < 6; i++){
+    printf("%.4f%% ", (double)((signed long long)total[i] - (signed long long)local[i]) / total[i] * 100);
+  }
+
+  fclose(fp);
+}
+
 /*
  * Program initialization
  * argv[1]: the path to the binary
@@ -2032,7 +2099,8 @@ int main(int argc, char *argv[]) {
   accessPerStmt *mem_access;
   mem_access = new accessPerStmt();
   dom->mem_access = mem_access;
-  status = get_access_relation_from_pet(dom, mem_access, unit, compilation_unit);
+  std::vector<std::pair<int, int> *> *pet_tree_tag;
+  pet_tree_tag = get_access_relation_from_pet(dom, mem_access, unit, compilation_unit);
   #ifdef DEBUG
   char *dump_str;
   for(auto v : *mem_access){
@@ -2092,13 +2160,13 @@ int main(int argc, char *argv[]) {
   // }
 
   cache_t  D1c, LLc;
-  D1c = (cache_t) { 32768, 8, 64 };
-  LLc = (cache_t) { 2097152, 16, 64 };
+  D1c = (cache_t) { 49152, 12, 64 };
+  LLc = (cache_t) { 1310720, 10, 64 };
   cachesim_initcaches(D1c, LLc);
   status = gen_and_sim_addr(tree, dom);
 
-  printf("Dr: %llu, D1mr: %llu, DLmr: %llu\n", Dr, D1mr, DLmr);
-  printf("Dw: %llu, D1mw: %llu, DLmw: %llu\n", Dw, D1mw, DLmw);
+  printf("summary: 0 0 0 %lld %lld %lld %lld %lld %lld\n", Dr, D1mr, DLmr, Dw, D1mw, DLmw);
+  diff_result(pet_tree_tag);
 
   // Free the array of ptr
   for (int i = 0; i < compilation_unit; i++) {
