@@ -1499,6 +1499,7 @@ std::vector<std::pair<int, int> *> * get_access_relation_from_pet(domainSpace *d
         int has_val = 0;
         int bound_val = 0;
         char *endptr;
+        std::vector<MemoryAccess*>::iterator target;
 
         switch(hash_(expression)){
           case  hash_compile_time( "access" ): 
@@ -1621,6 +1622,11 @@ already_established:
             mem->constAddr = 0x000010a008 + constval_counter.size() * 4;
             // if it is a 0 then ignore
             if (!strcmp(expression, "0")) break;
+            // If there is already a constant with the same name, then ignore
+            target = std::find_if(maPair->second->begin(), maPair->second->end(), [expression](MemoryAccess *mem) {
+              return !strcmp(mem->arrarName.c_str(), expression);
+            });
+            if (target != maPair->second->end()) break;
             maPair->second->push_back(mem);
             // not really an array but a constant, still need the content
             array = init_ArrayRef(expression);
