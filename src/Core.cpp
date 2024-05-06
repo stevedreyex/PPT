@@ -67,6 +67,7 @@ static cache_t2 D1;
 ULong D1mr = 0, DLmr = 0;
 ULong D1mw = 0, DLmw = 0;
 ULong Dr = 0, Dw = 0;
+ULong *miss_per_stmt;
   
 hash_t hash_( char const * str)   
 {  
@@ -1620,7 +1621,7 @@ already_established:
             mem->arrarName = expression;
             constval_counter.insert(mem->arrarName);
             mem->constAddr = 0x000010a008 + constval_counter.size() * 4;
-            // if it is a 0 then ignore
+            // if it is a 0 then ignore -> don't, 3mm actually have a 0
             if (!strcmp(expression, "0")) break;
             // If there is already a constant with the same name, then ignore
             target = std::find_if(maPair->second->begin(), maPair->second->end(), [expression](MemoryAccess *mem) {
@@ -1640,6 +1641,7 @@ already_established:
       }
 end:
       found = 0;
+      mem_access->push_back(maPair);
       // reverse the vector in pair->second
       sort(maPair->second->begin(), maPair->second->end() , [](const MemoryAccess* a, const MemoryAccess* b) {
           // READ 1 / CONST 2 before WRITE 0
@@ -1653,7 +1655,10 @@ end:
               return a->lineno < b->lineno;
           }
       });
-      mem_access->push_back(maPair);
+      // If the only on WRITE element is not at the end, then swap it to the end
+      if (maPair->second->size() > 1 && maPair->second->at(0)->type == WRITE){
+        std::swap(maPair->second->at(0), maPair->second->at(maPair->second->size() - 1));
+      }
       // Dump the mem_access
       // std::cout << "ROUND" << std::endl;
       // for (auto &v : *maPair->second){
@@ -1889,29 +1894,31 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
           addr = dom->array_refs->at(ar->arrarName)->start_addr
                 + 4 * calc_offset_const_val(ar, tree->dom->array_refs->at(ar->arrarName));
           if (ar->type == WRITE){
-            Dw++;
-            prev_d1m = D1mw;
-            prev_dlm = DLmw;
-            cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1mw, &DLmw);
+            miss_per_stmt[ 6 * tree->curr_stmt  + 3]++;
+            prev_d1m = miss_per_stmt[ 6 * tree->curr_stmt  + 4];
+            prev_dlm = miss_per_stmt[ 6 * tree->curr_stmt  + 5];
+            cachesim_D1_doref(addr, ARR_ELEM_SIZE, &miss_per_stmt[ 6 * tree->curr_stmt  + 4],
+             &miss_per_stmt[ 6 * tree->curr_stmt  + 5]);
             #ifdef SIM_OBSERVE
-            if (prev_d1m != D1mw) report_miss(1, 0, ar, addr);
-            // if (prev_dlm != DLmw) report_miss(0, 0, ar, addr);
+            if (prev_d1m != miss_per_stmt[ 6 * tree->curr_stmt  + 4]) report_miss(1, 0, ar, addr);
+            // if (prev_dlm != miss_per_stmt[ 6 * tree->curr_stmt  + 5]) report_miss(0, 0, ar, addr);
             #endif
           } else {
-            Dr++;
-            prev_d1m = D1mr;
-            prev_dlm = DLmr;
-            cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1mr, &DLmr);
+            miss_per_stmt[ 6 * tree->curr_stmt ]++;
+            prev_d1m = miss_per_stmt[ 6 * tree->curr_stmt  + 1];
+            prev_dlm = miss_per_stmt[ 6 * tree->curr_stmt  + 2];
+            cachesim_D1_doref(addr, ARR_ELEM_SIZE, &miss_per_stmt[ 6 * tree->curr_stmt  + 1],
+             &miss_per_stmt[ 6 * tree->curr_stmt  + 2]);
             #ifdef SIM_OBSERVE
-            if (prev_d1m != D1mr) report_miss(1, 1, ar, addr);
-            // if (prev_dlm != DLmr) report_miss(0, 1, ar, addr);
+            if (prev_d1m != miss_per_stmt[ 6 * tree->curr_stmt  + 1]) report_miss(1, 1, ar, addr);
+            // if (prev_dlm != miss_per_stmt[ 6 * tree->curr_stmt  + 2]) report_miss(0, 1, ar, addr);
             #endif
           }
           // printf("ArrayRef %d S%d addr: 0x%.10llx\n",ar->type, tree->curr_stmt,addr);
         } else {
           // Constant access
           addr = ar->constAddr;
-          Dr++;
+          miss_per_stmt[ 6 * tree->curr_stmt ]++;
           cachesim_D1_doref(addr, ARR_ELEM_SIZE, &D1mr, &DLmr);
           // printf("Constant addr: 0x%.12llx\n", addr);
         }
@@ -1937,6 +1944,7 @@ void diff_result(std::vector<std::pair<int, int> *> *pet_tree_tag){
   strcpy(result, sim_prog_path);
   char newSubstr[] = "/trace/cachegrind.out.";
   replaceString(result, "/obj/", newSubstr);
+  int stmt_no = pet_tree_tag->size();
 
   FILE *fp;
   fp = fopen(result, "r");
@@ -1947,13 +1955,31 @@ void diff_result(std::vector<std::pair<int, int> *> *pet_tree_tag){
   // Dr D1Mr DLmr Dw D1Mw DLmw
   unsigned long long local[6] = {0, 0, 0, 0, 0, 0};
   unsigned long long temp[6] = {0, 0, 0, 0, 0, 0};
-  unsigned long long total[6] = {Dr, D1mr, DLmr, Dw, D1mw, DLmw};
+  unsigned long long total[6] = {0, 0, 0, 0, 0, 0};
 
   char *line_ch = NULL;
   size_t line_length = 0;
   int start_parse = 0;
   int line_no;
 
+  std::cout << "Total: " << std::endl;
+  // Get the total
+  for (int i = 1; i < stmt_no + 1; i++){
+    total[0] += miss_per_stmt[6 * i];
+    total[1] += miss_per_stmt[6 * i + 1];
+    total[2] += miss_per_stmt[6 * i + 2];
+    total[3] += miss_per_stmt[6 * i + 3];
+    total[4] += miss_per_stmt[6 * i + 4];
+    total[5] += miss_per_stmt[6 * i + 5];
+    printf("%d\t%llu\t%llu\t%llu\t%llu\t%llu\t%llu\n", pet_tree_tag->at(i-1)->first, miss_per_stmt[6 * i], miss_per_stmt[6 * i + 1], miss_per_stmt[6 * i + 2], miss_per_stmt[6 * i + 3], miss_per_stmt[6 * i + 4], miss_per_stmt[6 * i + 5]);
+  }
+
+  printf("Total sum: ");
+  for (int i = 0; i < 6; i++){
+    printf("%llu ", total[i]);
+  }
+
+  std::cout << "\nLocal: " << std::endl;
   while (getline(&line_ch, &line_length, fp) != -1) {
     // line_ch have "fn" then is starts from the next line
     if (line_ch[0] == 'f' && line_ch[1] == 'n')  start_parse = 1;
@@ -1966,6 +1992,7 @@ void diff_result(std::vector<std::pair<int, int> *> *pet_tree_tag){
         return false;
       });
       if (it != pet_tree_tag->end()){
+        std::cout << line_no << "\t" << temp[0] << "\t" << temp[1] << "\t" << temp[2] << "\t" << temp[3] << "\t" << temp[4] << "\t" << temp[5] << std::endl;
         for (int i = 0; i < 6; i++){
           local[i] += temp[i];
         }
@@ -1973,14 +2000,17 @@ void diff_result(std::vector<std::pair<int, int> *> *pet_tree_tag){
     }
   }
   // Dump local
-  printf("local: \t");
+  printf("Local sum: ");
   for (int i = 0; i < 6; i++){
     printf("%llu ", local[i]);
   }
-
+  
   printf("\nerror rate: ");
   for (int i = 0; i < 6; i++){
-    printf("%.4f%% ", (double)((signed long long)total[i] - (signed long long)local[i]) / total[i] * 100);
+    if(total[i] != 0)
+      printf("%.4f%% ", (double)((signed long long)total[i] - (signed long long)local[i]) / total[i] * 100);
+    else
+      printf("0.0000%% ");
   }
 
   fclose(fp);
@@ -2096,6 +2126,8 @@ int main(int argc, char *argv[]) {
     }
   }
   #endif
+  miss_per_stmt = (ULong *)(malloc(6 *(dom->stmt_num + 1) * sizeof(ULong)));
+  memset(miss_per_stmt, 0, 6 *(dom->stmt_num + 1) * sizeof(ULong));
   /* 
    * int get_access_relation_from_pet(accessPerStmt *mem_access, char **unit, int compilation_unit)
    *
@@ -2166,12 +2198,11 @@ int main(int argc, char *argv[]) {
   // }
 
   cache_t  D1c, LLc;
-  D1c = (cache_t) { 49152, 12, 64 };
-  LLc = (cache_t) { 1310720, 10, 64 };
+  D1c = (cache_t) { 32768, 8, 64 };
+  LLc = (cache_t) { 2097152, 16, 64 };
   cachesim_initcaches(D1c, LLc);
   status = gen_and_sim_addr(tree, dom);
 
-  printf("summary: 0 0 0 %lld %lld %lld %lld %lld %lld\n", Dr, D1mr, DLmr, Dw, D1mw, DLmw);
   diff_result(pet_tree_tag);
 
   // Free the array of ptr

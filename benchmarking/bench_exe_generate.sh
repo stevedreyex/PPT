@@ -4,7 +4,7 @@
 # src is the main directory of the benchmark
 src=/home/dreyex/Documents/Research/TraceBench
 # dst is the directory where the traces will be saved
-dst=/home/dreyex/use_that
+dst=/home/dreyex/trace/use_that
 # could choose MINI_DATASET, SMALL_DATASET, MEDIUM_DATASET, LARGE_DATASET, EXTRALARGE_DATASET
 data_size=SMALL_DATASET
 

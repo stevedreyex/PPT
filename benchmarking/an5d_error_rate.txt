@@ -1,0 +1,163 @@
+Processing ./linear-algebra/kernels/3mm/3mm.c
+Compile Succeeded
+Finish generating trace for 3mm with 1.241 seconds.
+Finish generating trace for 3mm with 0.404 seconds.
+Simulate the program: /home/dreyex/trace/use_this/obj/3mm
+Total: 
+1       0       0       0       2000    125     125
+2       360000  338     338     120000  0       0
+3       0       0       0       3500    219     219
+4       840000  600     600     280000  0       0
+5       0       0       0       2800    175     175
+6       420000  155     0       140000  0       0
+Total sum: 1620000 1093 938 548300 519 519 
+Local: 
+92      2000    0       0       2000    125     125
+94      360000  338     338     120000  0       0
+100     0       0       0       3500    219     219
+102     840000  600     600     280000  0       0
+108     0       0       0       2800    175     175
+110     420000  155     0       140000  0       0
+Local sum: 1622000 1093 938 548300 519 519 
+error rate: -0.1235% 0.0000% 0.0000% 0.0000% 0.0000% 0.0000% 
+Finish generating trace for 3mm with 5.651 seconds.
+
+Processing ./linear-algebra/blas/gemver/gemver.c
+Compile Succeeded
+Finish generating trace for gemver with 0.273 seconds.
+Finish generating trace for gemver with 0.40 seconds.
+Simulate the program: /home/dreyex/trace/use_this/obj/gemver
+Total: 
+1       72000   932     932     14400   0       0
+2       43200   533     16      14400   0       0
+3       240     10      8       120     0       0
+4       43200   457     8       14400   0       0
+Total sum: 158640 1932 964 43320 0 0 
+Local: 
+107     72000   932     932     14400   0       0
+111     43200   533     16      14400   0       0
+114     240     11      8       120     0       0
+118     43200   457     8       14400   0       0
+Local sum: 158640 1933 964 43320 0 0 
+error rate: 0.0000% -0.0518% 0.0000% 0.0000% 0.0000% 0.0000% 
+Finish generating trace for gemver with 0.807 seconds.
+
+Processing ./linear-algebra/blas/symm/symm.c
+Compile Succeeded
+Finish generating trace for symm with 0.617 seconds.
+Finish generating trace for symm with 0.168 seconds.
+Simulate the program: /home/dreyex/trace/use_this/obj/symm
+Total: 
+1       0       0       0       0       0       0
+2       424800  450     450     141600  0       0
+3       283200  0       0       0       0       0
+4       14400   18      18      4800    0       0
+Total sum: 722400 468 468 146400 0 0 
+Local: 
+100     0       0       0       0       0       0
+102     424800  450     450     141600  0       0
+103     283200  0       0       0       0       0
+105     14400   309     309     4800    0       0
+Local sum: 722400 759 759 146400 0 0 
+error rate: 0.0000% -62.1795% -62.1795% 0.0000% 0.0000% 0.0000% 
+Finish generating trace for symm with 2.599 seconds.
+
+Processing ./linear-algebra/blas/syr2k/syr2k.c
+Compile Succeeded
+Finish generating trace for syr2k with 0.754 seconds.
+Finish generating trace for syr2k with 0.216 seconds.
+Simulate the program: /home/dreyex/trace/use_this/obj/syr2k
+Total: 
+1       3240    240     240     3240    0       0
+2       972000  309     309     194400  0       0
+Total sum: 975240 549 549 197640 0 0 
+Local: 
+94      3240    240     240     3240    0       0
+98      972000  600     600     194400  0       0
+Local sum: 975240 840 840 197640 0 0 
+error rate: 0.0000% -53.0055% -53.0055% 0.0000% 0.0000% 0.0000% 
+Finish generating trace for syr2k with 3.81 seconds.
+
+Processing ./linear-algebra/blas/trmm/trmm.c
+Compile Succeeded
+Finish generating trace for trmm with 0.445 seconds.
+Finish generating trace for trmm with 0.105 seconds.
+Simulate the program: /home/dreyex/trace/use_this/obj/trmm
+Total: 
+1       424800  455     455     141600  0       0
+2       4880    10      10      4880    0       0
+Total sum: 429680 465 465 146480 0 0 
+Local: 
+93      424800  456     456     141600  0       0
+94      4800    0       0       4800    0       0
+Local sum: 429600 456 456 146400 0 0 
+error rate: 0.0186% 1.9355% 1.9355% 0.0546% 0.0000% 0.0000% 
+Finish generating trace for trmm with 1.596 seconds.
+
+Processing ./linear-algebra/solvers/lu/lu.c
+Compile Succeeded
+Finish generating trace for lu with 1.300 seconds.
+Finish generating trace for lu with 0.399 seconds.
+Simulate the program: /home/dreyex/trace/use_this/obj/lu
+Error: var is NULL
+Total: 
+1       842520  519     518     280840  0       0
+2       14280   119     118     7140    0       0
+3       863940  269     265     287980  0       0
+Total sum: 1720740 907 901 575960 0 0 
+Local: 
+97      842520  413     413     280840  0       0
+99      14280   61      61      7140    0       0
+103     863940  426     426     287980  0       0
+Local sum: 1720740 900 900 575960 0 0 
+error rate: 0.0000% 0.7718% 0.1110% 0.0000% 0.0000% 0.0000% 
+Finish generating trace for lu with 5.311 seconds.
+
+Processing ./stencils/fdtd-2d/fdtd-2d.c
+Compile Succeeded
+Finish generating trace for fdtd-2d with 1.753 seconds.
+Finish generating trace for fdtd-2d with 0.565 seconds.
+Simulate the program: /home/dreyex/trace/use_this/obj/fdtd-2d
+Total: 
+1       3200    18      3       3200    5       5
+2       755200  304     304     188800  0       0
+3       758400  375     300     189600  0       0
+4       1118640 0       0       186440  0       0
+Total sum: 2635440 697 607 568040 5 5 
+Local: 
+109     3200    40      3       3200    200     5
+112     755200  6836    596     188800  0       0
+115     758400  8880    300     189600  0       0
+118     1118640 18280   0       186440  0       0
+Local sum: 2635440 34036 899 568040 200 5 
+error rate: 0.0000% -4783.2138% -48.1054% 0.0000% -3900.0000% 0.0000% 
+Finish generating trace for fdtd-2d with 6.984 seconds.
+
+Processing ./stencils/seidel-2d/seidel-2d.c
+Compile Succeeded
+Finish generating trace for seidel-2d with 3.212 seconds.
+Finish generating trace for seidel-2d with 1.43 seconds.
+Simulate the program: /home/dreyex/trace/use_this/obj/seidel-2d
+Total: 
+1       0       0       0       0       0       0
+Total sum: 0 0 0 0 0 0 
+Local: 
+75      5569600 36001   901     556960  0       0
+Local sum: 5569600 36001 901 556960 0 0 
+error rate: 0.0000% 0.0000% 0.0000% 0.0000% 0.0000% 0.0000% 
+Finish generating trace for seidel-2d with 14.923 seconds.
+
+Processing ./stencils/heat-3d/heat-3d.c
+Compile Succeeded
+Finish generating trace for heat-3d with 2.271 seconds.
+Finish generating trace for heat-3d with 0.734 seconds.
+Simulate the program: /home/dreyex/trace/use_this/obj/heat-3d
+Total: 
+1       2799360 27      27      233280  414     414
+2       2799360 82      82      233280  0       0
+Total sum: 5598720 109 109 466560 414 414 
+Local: 
+80      1866240 19841   497     233280  16560   414
+87      1866240 19840   82      233280  16560   0
+Local sum: 3732480 39681 579 466560 33120 414 
+error rate: 33.3333% -36304.5872% -431.1927% 0.0000% -7900.0000% 0.0000%

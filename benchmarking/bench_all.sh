@@ -6,8 +6,8 @@ data_size=SMALL_DATASET
 # src is the main directory of the benchmark
 src=/home/dreyex/Documents/Research/TraceBench
 # dst is the directory where the traces will be saved
-dst=/home/dreyex/use_that
-benchmark=./benchmark_list_an5d
+dst=/home/dreyex/trace/use_this
+benchmark=./benchmark_list
 ppcg_bin=`pwd`/../ppcg/install/bin
 now=""
 
@@ -28,7 +28,7 @@ calculate_elapsed_time() {
 # Time to generate the trace for simulation
 run_test_a() {
     local item_basename=$1
-    ../valgrind/vg-in-place --tool=cachegrind --instr-at-start=no --cache-sim=yes --D1=49152,12,64 --I1=32768,8,64 --L2=1310720,10,64 -v --cachegrind-out-file="cachegrind.out.$item_basename" --log-fd=1  $dst/obj/$item_basename | grep -v "-" | grep -v "=" >  $dst/trace/$item_basename.log
+    ../valgrind/vg-in-place --tool=cachegrind --instr-at-start=no --cache-sim=yes --D1=32768,8,64 --L2=2097152,16,64 -v --cachegrind-out-file="cachegrind.out.$item_basename" --log-fd=1  $dst/obj/$item_basename | grep -v "-" | grep -v "=" >  $dst/trace/$item_basename.log
     mv cachegrind.out.$now $dst/trace
 }
 
@@ -74,11 +74,11 @@ while IFS= read -r i; do
 
 
     start_time=$(get_current_time)
-    test_result=("$(run_test_c $now)")
-    echo $test_result
+    test_result=$(run_test_c $now)
     finish_time=$(get_current_time)
     elapsed_time=$(calculate_elapsed_time "$start_time" "$finish_time")
     echo "Finish generating trace for $now with $elapsed_time seconds."
+    echo "$test_result"
     test_c_timings=$elapsed_time
 
     printf "%s %s %s %s\n" "$now" "$test_a_timings" "$test_b_timings" "$test_c_timings" >> timings.dat
