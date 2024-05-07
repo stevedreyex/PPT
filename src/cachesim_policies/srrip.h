@@ -1,495 +1,103 @@
-#include<stdio.h>
-#include<stdlib.h>
-
+// Description: Implementation of the SRRIP policy.
 #define MAX_RRPV 3
 
-struct cacheLineSRRIP
-{
-    int valid;
-    long tag;
-    int rrpv;
-};
-struct cacheSet2SRRIP
-{
-    struct cacheLineSRRIP c[2];
-    int front, back;
-};
-struct cacheSet4SRRIP
-{
-    struct cacheLineSRRIP c[4];
-    int front, back;
-};
-struct cacheSet8SRRIP
-{
-    struct cacheLineSRRIP c[8];
-    int front, back;
-};
-struct cacheSet16SRRIP
-{
-    struct cacheLineSRRIP c[16];
-    int front, back;
-};
-struct cacheSet2SRRIP cache2srrip[33000];
-struct cacheSet4SRRIP cache4srrip[33000];
-struct cacheSet8SRRIP cache8srrip[33000];
-struct cacheSet16SRRIP cache16srrip[33000];
 
-static int initializeCacheSetSRRIP = 0;
+extern cache_t2 D1;
 
-int calcforCacheset2srrip(long long indices, long long tags, int size, int numOfWays, int blocksize)
-{
-    int cache_size = 32*1024, no_cache_blocks = cache_size/blocksize;
-    int i, j, count, no_cache_sets = no_cache_blocks/numOfWays;
-    long long setNum,tag;
+__attribute__((always_inline))
+static __inline__
+void srrip_sim(Addr a, UChar size, ULong* m1, ULong *mL){
+    int i, j;
+    cache_t2* c = &D1;
+    UWord block1 =  a         >> c->line_size_bits;
+    UInt  set_no   = block1 & c->sets_min_1;
 
-    if(initializeCacheSetSRRIP == 0)
-    {
-        // initialize maxRRPV i.e. to distant value 3
-        for(int i=0; i < no_cache_sets; ++i)
-        {
-            for(int j=0; j < numOfWays; ++j)
-            {
-                cache2srrip[i].c[j].rrpv = MAX_RRPV;
-            }
+    /* Tags used in real caches are minimal to save space.
+        * As the last bits of the block number of addresses mapping
+        * into one cache set are the same, real caches use as tag
+        *   tag = block >> log2(#sets)
+        * But using the memory block as more specific tag is fine,
+        * and saves instructions.
+        */
+    UWord tag   = block1;
+
+    UWord *set;
+
+    set = &(c->tags[set_no * c->assoc]);
+
+    /* This loop is unrolled for just the first case, which is the most */
+    /* common.  We can't unroll any further because it would screw up   */
+    /* if we have a direct-mapped (1-way) cache.                        */
+    if (tag == set[0])
+        return;
+
+    long long int p= c->assoc*set_no;
+
+    // Could found
+    for(j=p;j<p+c->assoc;j++){
+        if(set[j] == tag){
+            // set the status to 0 (recently used)
+			// Cache hit (i)
+			c->RRPV[j] = 0;
+			return;
         }
-        printf("Cache RRPV Initialization done\n");
-        initializeCacheSetSRRIP = 1;
     }
-    
-    // now check for every reference to the cache
-        setNum = indices;
-        tag = tags;
-        //printf("Tag %lld setNum %lld\n", tag, setNum);
-        for (j = 0, count = 0; j < numOfWays; j++)
-        {
-            // if cache block is valid and tag matches then we have a hit
-            if (cache2srrip[setNum].c[j].valid == 1 && cache2srrip[setNum].c[j].tag == tag)
-            {
-                //printf("Cache hit at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                for(long long int k=0; k < no_cache_sets; ++k)
-                {
-                    //printf("DEBUG: k = %lld Inside LOOP1 the updating cache rrpv values\n", k);
-                    for(long long int l=0; l < numOfWays; ++l)
-                    {
-                        if(cache2srrip[k].c[l].rrpv < 3)
-                        cache2srrip[k].c[l].rrpv++;
-                        //printf("DEBUG: l = %lld Inside LOOP2 the updating cache rrpv values\n", l);
-                    }
-                }
-                cache2srrip[setNum].c[i].rrpv = 0;
-                return 1;
-            }
-
-            //Beginning with all misses - that is when the cache is being warmed up.
-            else if (cache2srrip[setNum].c[j].valid == 0)
-            {
-                //printf("Cache miss with no data at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                cache2srrip[setNum].c[j].valid = 1;
-                cache2srrip[setNum].c[j].tag = tag;
-                cache2srrip[setNum].c[j].rrpv = MAX_RRPV;
-                //printf("Data added at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                return 0;
-            }
-
-            //Cache miss at set and cache line is valid
-            else
-            {
-                //printf("Cache miss at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                count++;
-            }
-
-            // if (cache2[i].c[j].valid == 0 || cache2[i].c[j].tag!=tag)
-            // {
-            //     count++;
-            // }
-
-            if (count == numOfWays)
-            {
-                //printf("All cache lines in the set checked and no match so replacement will be performed\n");
-                cache2srrip[setNum].c[cache2srrip[setNum].back].tag = tag;
-                cache2srrip[setNum].c[cache2srrip[setNum].back].valid = 1;
-
-                // now search for a block in the set with maxRRPV value
-                while(1)
-                {
-                    int found = 0;
-                    for(int p = 0; p < numOfWays; ++p)
-                    {
-                        if(cache2srrip[setNum].c[p].rrpv == 3)
-                        {
-                            // Replace this cache block (cache block with rrpv value 3) with the incoming block
-                            // and give it and rrpv value of 2.
-                            found = 1;
-                            cache2srrip[setNum].c[i].tag = tag;
-                            cache2srrip[setNum].c[p].rrpv = 2;
-                            return 0;
-                        }
-                    }
-
-                    if(found == 0)
-                    {
-                        for(int k=0; k < no_cache_sets; ++k)
-                        {
-                            for(int l=0; l < numOfWays; ++l)
-                            {
-                                if(cache2srrip[k].c[l].rrpv < 3)
-                                    cache2srrip[k].c[l].rrpv++;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    //printf("Hit %d Miss %d", hit, miss);
-    return 0;
+step1:
+    // Cache miss
+	// (1) search for first ‘1’ from left
+	for (i = 0; i < c->assoc; i++) {
+		if (c->RRPV[p + i] == 3) {
+			// (2) if found goto step 5
+			goto step5;
+		}
+	}
+	// (3) if all are ‘0’ then set all to ‘1’
+	for (i = 0; i < c->assoc; i++) {
+		c->RRPV[p + i]++;
+	}
+	// (4) goto step 1
+	goto step1;
+step5:
+	// (5) replace block and set its status to ‘2’
+	set[p + i] = tag;
+	c->RRPV[p + i] = 2;
+	(*m1)++;
 }
 
-
-int calcforCacheset4srrip(long long indices, long long tags, int size, int numOfWays, int blocksize)
+/* By this point, the size/assoc/line_size has been checked. */
+static void cachesim_initsrrip(cache_t config, cache_t2* c)
 {
-    int cache_size = 32*1024, no_cache_blocks = cache_size/blocksize;
-    int i, j, count, no_cache_sets = no_cache_blocks/numOfWays;
-    long long setNum,tag;
+   Int i;
 
-    if(initializeCacheSetSRRIP == 0)
-    {
-        // initialize maxRRPV i.e. to distant value 3
-        for(int i=0; i < no_cache_sets; ++i)
-        {
-            for(int j=0; j < numOfWays; ++j)
-            {
-                cache4srrip[i].c[j].rrpv = MAX_RRPV;
-            }
-        }
-        printf("Cache RRPV Initialization done\n");
-        initializeCacheSetSRRIP = 1;
-    }
-    
-    // now check for every reference to the cache
-        setNum = indices;
-        tag = tags;
-        //printf("Tag %lld setNum %lld\n", tag, setNum);
-        for (j = 0, count = 0; j < numOfWays; j++)
-        {
-            // if cache block is valid and tag matches then we have a hit
-            if (cache4srrip[setNum].c[j].valid == 1 && cache4srrip[setNum].c[j].tag == tag)
-            {
-                //printf("Cache hit at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                for(long long int k=0; k < no_cache_sets; ++k)
-                {
-                    //printf("DEBUG: k = %lld Inside LOOP1 the updating cache rrpv values\n", k);
-                    for(long long int l=0; l < numOfWays; ++l)
-                    {
-                        if(cache4srrip[k].c[l].rrpv < 3)
-                        cache4srrip[k].c[l].rrpv++;
-                        //printf("DEBUG: l = %lld Inside LOOP2 the updating cache rrpv values\n", l);
-                    }
-                }
-                cache4srrip[setNum].c[i].rrpv = 0;
-                return 1;
-            }
+   c->size      = config.size;
+   c->assoc     = config.assoc;
+   c->line_size = config.line_size;
 
-            //Beginning with all misses - that is when the cache is being warmed up.
-            else if (cache4srrip[setNum].c[j].valid == 0)
-            {
-                //printf("Cache miss with no data at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                cache4srrip[setNum].c[j].valid = 1;
-                cache4srrip[setNum].c[j].tag = tag;
-                cache4srrip[setNum].c[j].rrpv = MAX_RRPV;
-                //printf("Data added at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                return 0;
-            }
+   c->sets           = (c->size / c->line_size) / c->assoc;
+   c->sets_min_1     = c->sets - 1;
+   c->line_size_bits = log2(c->line_size);
+   c->tag_shift      = c->line_size_bits + log2(c->sets);
 
-            //Cache miss at set and cache line is valid
-            else
-            {
-                //printf("Cache miss at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                count++;
-            }
+   if (c->assoc == 1) {
+      sprintf(c->desc_line, "%d B, %d B, direct-mapped", 
+                                 c->size, c->line_size);
+   } else {
+      sprintf(c->desc_line, "%d B, %d B, %d-way associative",
+                                 c->size, c->line_size, c->assoc);
+   }
 
-            // if (cache2[i].c[j].valid == 0 || cache2[i].c[j].tag!=tag)
-            // {
-            //     count++;
-            // }
+   c->cacheLfu = (std::pair<long long int,long long int> *)malloc(sizeof(std::pair<long long int,long long int>) * c->sets * c->assoc);
 
-            if (count == numOfWays)
-            {
-                //printf("All cache lines in the set checked and no match so replacement will be performed\n");
-                cache4srrip[setNum].c[cache2srrip[setNum].back].tag = tag;
-                cache4srrip[setNum].c[cache2srrip[setNum].back].valid = 1;
+   //init
+   for (i = 0; i < c->sets * c->assoc; i++)
+      c->tags[i] = 0;
 
-                // now search for a block in the set with maxRRPV value
-                while(1)
-                {
-                    int found = 0;
-                    for(int p = 0; p < numOfWays; ++p)
-                    {
-                        if(cache4srrip[setNum].c[p].rrpv == 3)
-                        {
-                            // Replace this cache block (cache block with rrpv value 3) with the incoming block
-                            // and give it and rrpv value of 2.
-                            found = 1;
-                            cache4srrip[setNum].c[i].tag = tag;
-                            cache4srrip[setNum].c[p].rrpv = 2;
-                            return 0;
-                        }
-                    }
-
-                    if(found == 0)
-                    {
-                        for(int k=0; k < no_cache_sets; ++k)
-                        {
-                            for(int l=0; l < numOfWays; ++l)
-                            {
-                                if(cache4srrip[k].c[l].rrpv < 3)
-                                    cache4srrip[k].c[l].rrpv++;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    //printf("Hit %d Miss %d", hit, miss);
-    return 0;
+    c->RRPV = (short int *)malloc(sizeof(short int) * c->sets * c->assoc);
+    // Initial state all block with status 3 (avail to be replaced)
+    memset(c->RRPV, 3, sizeof(int) * c->sets * c->assoc);
 }
 
-int calcforCacheset8srrip(long long indices, long long tags, int size, int numOfWays, int blocksize)
+static void srrip_init(cache_t D1c, cache_t LLc)
 {
-    int cache_size = 32*1024, no_cache_blocks = cache_size/blocksize;
-    int i, j, count, no_cache_sets = no_cache_blocks/numOfWays;
-    long long setNum,tag;
-
-    if(initializeCacheSetSRRIP == 0)
-    {
-        // initialize maxRRPV i.e. to distant value 3
-        for(int i=0; i < no_cache_sets; ++i)
-        {
-            for(int j=0; j < numOfWays; ++j)
-            {
-                cache8srrip[i].c[j].rrpv = MAX_RRPV;
-            }
-        }
-        printf("Cache RRPV Initialization done\n");
-        initializeCacheSetSRRIP = 1;
-    }
-    
-    // now check for every reference to the cache
-        setNum = indices;
-        tag = tags;
-        //printf("Tag %lld setNum %lld\n", tag, setNum);
-        for (j = 0, count = 0; j < numOfWays; j++)
-        {
-            // if cache block is valid and tag matches then we have a hit
-            if (cache8srrip[setNum].c[j].valid == 1 && cache8srrip[setNum].c[j].tag == tag)
-            {
-                //printf("Cache hit at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                for(long long int k=0; k < no_cache_sets; ++k)
-                {
-                    //printf("DEBUG: k = %lld Inside LOOP1 the updating cache rrpv values\n", k);
-                    for(long long int l=0; l < numOfWays; ++l)
-                    {
-                        if(cache8srrip[k].c[l].rrpv < 3)
-                        cache8srrip[k].c[l].rrpv++;
-                        //printf("DEBUG: l = %lld Inside LOOP2 the updating cache rrpv values\n", l);
-                    }
-                }
-                cache8srrip[setNum].c[i].rrpv = 0;
-                return 1;
-            }
-
-            //Beginning with all misses - that is when the cache is being warmed up.
-            else if (cache8srrip[setNum].c[j].valid == 0)
-            {
-                //printf("Cache miss with no data at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                cache8srrip[setNum].c[j].valid = 1;
-                cache8srrip[setNum].c[j].tag = tag;
-                cache8srrip[setNum].c[j].rrpv = MAX_RRPV;
-                //printf("Data added at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                return 0;
-            }
-
-            //Cache miss at set and cache line is valid
-            else
-            {
-                //printf("Cache miss at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                count++;
-            }
-
-            // if (cache2[i].c[j].valid == 0 || cache2[i].c[j].tag!=tag)
-            // {
-            //     count++;
-            // }
-
-            if (count == numOfWays)
-            {
-                //printf("All cache lines in the set checked and no match so replacement will be performed\n");
-                cache8srrip[setNum].c[cache2srrip[setNum].back].tag = tag;
-                cache8srrip[setNum].c[cache2srrip[setNum].back].valid = 1;
-
-                // now search for a block in the set with maxRRPV value
-                while(1)
-                {
-                    int found = 0;
-                    for(int p = 0; p < numOfWays; ++p)
-                    {
-                        if(cache8srrip[setNum].c[p].rrpv == 3)
-                        {
-                            // Replace this cache block (cache block with rrpv value 3) with the incoming block
-                            // and give it and rrpv value of 2.
-                            found = 1;
-                            cache8srrip[setNum].c[i].tag = tag;
-                            cache8srrip[setNum].c[p].rrpv = 2;
-                            return 0;
-                        }
-                    }
-
-                    if(found == 0)
-                    {
-                        for(int k=0; k < no_cache_sets; ++k)
-                        {
-                            for(int l=0; l < numOfWays; ++l)
-                            {
-                                if(cache8srrip[k].c[l].rrpv < 3)
-                                    cache8srrip[k].c[l].rrpv++;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    //printf("Hit %d Miss %d", hit, miss);
-    return 0;
-}
-
-
-int calcforCacheset16srrip(long long indices, long long tags, int size, int numOfWays, int blocksize)
-{
-    int cache_size = 32*1024, no_cache_blocks = cache_size/blocksize;
-    int i, j, count, no_cache_sets = no_cache_blocks/numOfWays;
-    long long setNum,tag;
-
-    if(initializeCacheSetSRRIP == 0)
-    {
-        // initialize maxRRPV i.e. to distant value 3
-        for(int i=0; i < no_cache_sets; ++i)
-        {
-            for(int j=0; j < numOfWays; ++j)
-            {
-                cache16srrip[i].c[j].rrpv = MAX_RRPV;
-            }
-        }
-        printf("Cache RRPV Initialization done\n");
-        initializeCacheSetSRRIP = 1;
-    }
-    
-    // now check for every reference to the cache
-        setNum = indices;
-        tag = tags;
-        //printf("Tag %lld setNum %lld\n", tag, setNum);
-        for (j = 0, count = 0; j < numOfWays; j++)
-        {
-            // if cache block is valid and tag matches then we have a hit
-            if (cache16srrip[setNum].c[j].valid == 1 && cache16srrip[setNum].c[j].tag == tag)
-            {
-                //printf("Cache hit at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                for(long long int k=0; k < no_cache_sets; ++k)
-                {
-                    //printf("DEBUG: k = %lld Inside LOOP1 the updating cache rrpv values\n", k);
-                    for(long long int l=0; l < numOfWays; ++l)
-                    {
-                        if(cache16srrip[k].c[l].rrpv < 3)
-                        cache16srrip[k].c[l].rrpv++;
-                        //printf("DEBUG: l = %lld Inside LOOP2 the updating cache rrpv values\n", l);
-                    }
-                }
-                cache16srrip[setNum].c[i].rrpv = 0;
-                return 1;
-            }
-
-            //Beginning with all misses - that is when the cache is being warmed up.
-            else if (cache16srrip[setNum].c[j].valid == 0)
-            {
-                //printf("Cache miss with no data at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                cache16srrip[setNum].c[j].valid = 1;
-                cache16srrip[setNum].c[j].tag = tag;
-                cache16srrip[setNum].c[j].rrpv = MAX_RRPV;
-                //printf("Data added at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                return 0;
-            }
-
-            //Cache miss at set and cache line is valid
-            else
-            {
-                //printf("Cache miss at set %lld and cache line %d valid:%d Tag:%ld\n", setNum, j, cache2srrip[setNum].c[j].valid, cache2srrip[setNum].c[j].tag);
-                count++;
-            }
-
-            // if (cache2[i].c[j].valid == 0 || cache2[i].c[j].tag!=tag)
-            // {
-            //     count++;
-            // }
-
-            if (count == numOfWays)
-            {
-                //printf("All cache lines in the set checked and no match so replacement will be performed\n");
-                cache16srrip[setNum].c[cache2srrip[setNum].back].tag = tag;
-                cache16srrip[setNum].c[cache2srrip[setNum].back].valid = 1;
-
-                // now search for a block in the set with maxRRPV value
-                while(1)
-                {
-                    int found = 0;
-                    for(int p = 0; p < numOfWays; ++p)
-                    {
-                        if(cache16srrip[setNum].c[p].rrpv == 3)
-                        {
-                            // Replace this cache block (cache block with rrpv value 3) with the incoming block
-                            // and give it and rrpv value of 2.
-                            found = 1;
-                            cache16srrip[setNum].c[i].tag = tag;
-                            cache16srrip[setNum].c[p].rrpv = 2;
-                            return 0;
-                        }
-                    }
-
-                    if(found == 0)
-                    {
-                        for(int k=0; k < no_cache_sets; ++k)
-                        {
-                            for(int l=0; l < numOfWays; ++l)
-                            {
-                                if(cache16srrip[k].c[l].rrpv < 3)
-                                    cache16srrip[k].c[l].rrpv++;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    //printf("Hit %d Miss %d", hit, miss);
-    return 0;
-}
-
-
-int srrip(long long indices, long long tags, int size, int numOfWays, int blocksize)
-{
-    int answer;
-
-    if (numOfWays == 2)
-    {
-        answer = calcforCacheset2srrip(indices, tags, size, numOfWays, blocksize);
-    }
-    else if (numOfWays == 4)
-    {
-        answer = calcforCacheset4srrip(indices, tags, size, numOfWays, blocksize);
-    }
-    else if (numOfWays == 8)
-    {
-        answer = calcforCacheset8srrip(indices, tags, size, numOfWays, blocksize);
-    }
-    else
-    {
-        answer = calcforCacheset16srrip(indices, tags, size, numOfWays, blocksize);
-    }
-    return answer;
+   cachesim_initsrrip(D1c, &D1);
 }

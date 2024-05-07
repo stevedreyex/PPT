@@ -42,6 +42,7 @@ typedef struct {
    union{
         int          *fifo_tail_pos;
         bool         *referencedNru;
+        short int    *RRPV;
    };
    union {
         unsigned long*       tags;

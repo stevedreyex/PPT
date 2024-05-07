@@ -22,6 +22,7 @@
 #include "cachesim_policies/lfu.h"
 #include "cachesim_policies/fifo.h"
 #include "cachesim_policies/nru.h"
+#include "cachesim_policies/srrip.h"
 
 // Define a macro for error handling
 #define CHECK_NULL(pointer, message) \
@@ -1931,6 +1932,7 @@ int main(int argc, char *argv[]) {
         case  hash_compile_time( "lfu" ): init_func = &lfu_init; sim_func = &lfu_sim; break;
         case  hash_compile_time( "fifo" ): init_func = &fifo_init; sim_func = &fifo_sim; break;
         case  hash_compile_time( "nru" ): init_func = &nru_init; sim_func = &nru_sim; break;
+        case  hash_compile_time( "srrip" ): init_func = &srrip_init; sim_func = &srrip_sim; break;
   }
   /* 
    * int parse_dwarf(char **unit, FILE *fp)
