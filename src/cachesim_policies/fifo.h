@@ -57,22 +57,22 @@ void fifo_sim(Addr a, UChar size, ULong* m1, ULong *mL){
 
     UWord *set;
 
-   set = &(c->tags[set_no * c->assoc]);
+    set = &(c->tags[set_no * c->assoc]);
 
-   /* This loop is unrolled for just the first case, which is the most */
-   /* common.  We can't unroll any further because it would screw up   */
-   /* if we have a direct-mapped (1-way) cache.                        */
+    /* This loop is unrolled for just the first case, which is the most */
+    /* common.  We can't unroll any further because it would screw up   */
+    /* if we have a direct-mapped (1-way) cache.                        */
     if (tag == set[0])
-      return;
+        return;
 
     long long int p= c->assoc*set_no;
 
-	// Could found
-	for(j=p;j<p+c->assoc;j++){
-		if(set[j] == tag){
-			return;
-		}
-	}
+    // Could found
+    for(j=p;j<p+c->assoc;j++){
+        if(set[j] == tag){
+            return;
+        }
+    }
 
     // Not found
     set[p+c->fifo_tail_pos[set_no]] = tag;

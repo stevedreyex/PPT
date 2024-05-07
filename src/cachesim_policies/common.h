@@ -2,6 +2,7 @@
 #define COMMON_H
 
 #include<utility>
+#include<bitset>
 
 typedef  unsigned char   UChar;
 typedef    signed char   Char;
@@ -38,7 +39,10 @@ typedef struct {
    int          line_size_bits;
    int          tag_shift;
    char        desc_line[128];         /* large enough */
-   int          *fifo_tail_pos;
+   union{
+        int          *fifo_tail_pos;
+        bool         *referencedNru;
+   };
    union {
         unsigned long*       tags;
         std::pair<long long int,long long int>* cacheLfu;

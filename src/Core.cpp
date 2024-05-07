@@ -21,6 +21,7 @@
 #include "cachesim_policies/lru.h"
 #include "cachesim_policies/lfu.h"
 #include "cachesim_policies/fifo.h"
+#include "cachesim_policies/nru.h"
 
 // Define a macro for error handling
 #define CHECK_NULL(pointer, message) \
@@ -1902,7 +1903,7 @@ void diff_result(std::vector<std::pair<int, int> *> *pet_tree_tag){
   printf("\nerror rate: ");
   for (int i = 0; i < 6; i++){
     if(total[i] != 0)
-      printf("%.4f%% ", (double)((signed long long)total[i] - (signed long long)local[i]) / total[i] * 100);
+      printf("%.4f%% ", (double)((signed long long)total[i] - (signed long long)local[i]) / local[i] * 100);
     else
       printf("0.0000%% ");
   }
@@ -1926,9 +1927,10 @@ int main(int argc, char *argv[]) {
   std::cout << "Simulate the program: " << sim_prog_path << std::endl;
 
   switch(hash_(sim_policy)){
-          case  hash_compile_time( "lru" ): init_func = &lru_init; sim_func = &lru_sim; break;
-          case  hash_compile_time( "lfu" ): init_func = &lfu_init; sim_func = &lfu_sim; break;
-          case  hash_compile_time( "fifo" ): init_func = &fifo_init; sim_func = &fifo_sim; break;
+        case  hash_compile_time( "lru" ): init_func = &lru_init; sim_func = &lru_sim; break;
+        case  hash_compile_time( "lfu" ): init_func = &lfu_init; sim_func = &lfu_sim; break;
+        case  hash_compile_time( "fifo" ): init_func = &fifo_init; sim_func = &fifo_sim; break;
+        case  hash_compile_time( "nru" ): init_func = &nru_init; sim_func = &nru_sim; break;
   }
   /* 
    * int parse_dwarf(char **unit, FILE *fp)
