@@ -1,5 +1,6 @@
 #ifndef COMMON_H
 #define COMMON_H
+
 #include<utility>
 
 typedef  unsigned char   UChar;
@@ -37,10 +38,12 @@ typedef struct {
    int          line_size_bits;
    int          tag_shift;
    char        desc_line[128];         /* large enough */
+   int          *fifo_tail_pos;
    union {
         unsigned long*       tags;
         std::pair<long long int,long long int>* cacheLfu;
    };
    
 } cache_t2;
+
 #endif

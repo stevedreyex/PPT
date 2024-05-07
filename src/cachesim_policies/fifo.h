@@ -1,268 +1,87 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-// compile ../../../pin -t obj-intel64/pinatrace.so -- executable file | gzip > trace.gz
-// make obj-intel64/pinatrace.so
-struct cacheLine
-{
-    int valid;
-    long tag;
-};
-struct cacheSet2
-{
-    struct cacheLine c[2];
-    int front, back;
-};
-struct cacheSet4
-{
-    struct cacheLine c[4];
-    int front, back;
-};
-struct cacheSet8
-{
-    struct cacheLine c[8];
-    int front, back;
-};
-struct cacheSet16
-{
-    struct cacheLine c[16];
-    int front, back;
-};
-struct cacheSet2 cache2[512];
-struct cacheSet4 cache4[256];
-struct cacheSet8 cache8[128];
-struct cacheSet16 cache16[64];
-int miss, hit;
-long long setNum, tag;
-float calcforCacheset2(long long indices, long long tags, int size, int numOfWays)
-{
-    int i, j, count;
-    for (i = 0; i < size; i++)
-    {
-        setNum = indices;
-        tag = tags;
-        // printf("Tag %d setNum %d\n",tag,setNum);
-        for (j = 0, count = 0; j < numOfWays; j++)
-        {
-            if (cache2[setNum].c[j].valid == 1 && cache2[setNum].c[j].tag == tag)
-            {
-                // printf("Cache hit at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache2[setNum].c[j].valid, cache2[setNum].c[j].tag);
-                // hit++;
-                return 1;
-                break;
-            }
-            //Beginning with all misses
-            else if (cache2[setNum].c[j].valid == 0)
-            {
-                // printf("Cache miss with no data at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache2[setNum].c[j].valid, cache2[setNum].c[j].tag);
-                cache2[setNum].c[j].valid = 1;
-                cache2[setNum].c[j].tag = tag;
-                cache2[setNum].front = (cache2[setNum].front + 1) % numOfWays;
-                // printf("Data added at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache2[setNum].c[j].valid, cache2[setNum].c[j].tag);
-                // miss++;
-                return 0;
-                break;
-            }
-            else
-            {
+#include "common.h"
 
-                // printf("Cache miss at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache2[setNum].c[j].valid, cache2[setNum].c[j].tag);
-                count++;
-            }
-            // if (cache2[i].c[j].valid == 0 || cache2[i].c[j].tag!=tag)
-            // {
-            //     count++;
-            // }
-            if (count == numOfWays)
-            {
-                // printf("All cache lines in the set checked and non match so fifo performed back%d\n", cache2[setNum].back);
+extern cache_t2 LL;
+extern cache_t2 D1;
 
-                miss++;
-                cache2[setNum].c[cache2[setNum].back].tag = tag;
-                cache2[setNum].c[cache2[setNum].back].valid = 1;
-                cache2[setNum].back = (cache2[setNum].back + 1) % numOfWays;
-                return 0;
-            }
-        }
-    }
-    return ((float)hit / size);
-    // printf("Hit %d Miss %d", hit, miss);
+/* By this point, the size/assoc/line_size has been checked. */
+static void cachesim_initfifo(cache_t config, cache_t2* c)
+{
+   Int i;
+
+   c->size      = config.size;
+   c->assoc     = config.assoc;
+   c->line_size = config.line_size;
+
+   c->sets           = (c->size / c->line_size) / c->assoc;
+   c->sets_min_1     = c->sets - 1;
+   c->line_size_bits = log2(c->line_size);
+   c->tag_shift      = c->line_size_bits + log2(c->sets);
+
+   if (c->assoc == 1) {
+      sprintf(c->desc_line, "%d B, %d B, direct-mapped", 
+                                 c->size, c->line_size);
+   } else {
+      sprintf(c->desc_line, "%d B, %d B, %d-way associative",
+                                 c->size, c->line_size, c->assoc);
+   }
+
+   c->cacheLfu = (std::pair<long long int,long long int> *)malloc(sizeof(std::pair<long long int,long long int>) * c->sets * c->assoc);
+
+   //init
+   for (i = 0; i < c->sets * c->assoc; i++)
+      c->tags[i] = 0;
+
+    c->fifo_tail_pos = (int *)malloc(sizeof(int) * c->sets);
+    memset(c->fifo_tail_pos, 0, sizeof(int) * c->sets);
 }
 
-float calcforCacheset4(long long indices, long long tags, int size, int numOfWays)
-{
-    int i, j, count;
-    for (i = 0; i < size; i++)
-    {
-        setNum = indices;
-        tag = tags;
-        // printf("Tag %d setNum %d\n",tag,setNum);
-        for (j = 0, count = 0; j < numOfWays; j++)
-        {
-            if (cache4[setNum].c[j].valid == 1 && cache4[setNum].c[j].tag == tag)
-            {
-                // printf("Cache hit at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache4[setNum].c[j].valid, cache4[setNum].c[j].tag);
-                hit++;
-                return 1;
-                break;
-            }
-            //Beginning with all misses
-            else if (cache4[setNum].c[j].valid == 0)
-            {
-                // printf("Cache miss with no data at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache2[setNum].c[j].valid, cache2[setNum].c[j].tag);
-                cache4[setNum].c[j].valid = 1;
-                cache4[setNum].c[j].tag = tag;
-                cache4[setNum].front = (cache4[setNum].front + 1) % numOfWays;
-                // printf("Data added at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache4[setNum].c[j].valid, cache4[setNum].c[j].tag);
-                miss++;
-                return 0;
-                break;
-            }
-            else
-            {
-                // printf("Cache miss at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache4[setNum].c[j].valid, cache4[setNum].c[j].tag);
-                count++;
-            }
-            // if (cache2[i].c[j].valid == 0 || cache2[i].c[j].tag!=tag)
-            // {
-            //     count++;
-            // }
-            if (count == numOfWays)
-            {
-                // printf("All cache lines in the set checked and non match so fifo performed back%d\n", cache2[setNum].back);
-                miss++;
-                cache4[setNum].c[cache4[setNum].back].tag = tag;
-                cache4[setNum].c[cache4[setNum].back].valid = 1;
-                cache4[setNum].back = (cache4[setNum].back + 1) % numOfWays;
-                return 0;
-            }
-        }
-    }
-    // return ((float)hit / size);
-    // printf("Hit %d Miss %d", hit, miss);
+__attribute__((always_inline))
+static __inline__
+void fifo_sim(Addr a, UChar size, ULong* m1, ULong *mL){
+    int i, j;
+    cache_t2* c = &D1;
+    UWord block1 =  a         >> c->line_size_bits;
+    UInt  set_no   = block1 & c->sets_min_1;
+
+    /* Tags used in real caches are minimal to save space.
+        * As the last bits of the block number of addresses mapping
+        * into one cache set are the same, real caches use as tag
+        *   tag = block >> log2(#sets)
+        * But using the memory block as more specific tag is fine,
+        * and saves instructions.
+        */
+    UWord tag   = block1;
+
+    UWord *set;
+
+   set = &(c->tags[set_no * c->assoc]);
+
+   /* This loop is unrolled for just the first case, which is the most */
+   /* common.  We can't unroll any further because it would screw up   */
+   /* if we have a direct-mapped (1-way) cache.                        */
+    if (tag == set[0])
+      return;
+
+    long long int p= c->assoc*set_no;
+
+	// Could found
+	for(j=p;j<p+c->assoc;j++){
+		if(set[j] == tag){
+			return;
+		}
+	}
+
+    // Not found
+    set[p+c->fifo_tail_pos[set_no]] = tag;
+    c->fifo_tail_pos[set_no] = (c->fifo_tail_pos[set_no] + 1) % c->assoc;
+    (*m1)++;
+    return;
 }
-float calcforCacheset8(long long indices, long long tags, int size, int numOfWays)
+
+static void fifo_init(cache_t D1c, cache_t LLc)
 {
-    int i, j, count;
-    for (i = 0; i < size; i++)
-    {
-        setNum = indices;
-        tag = tags;
-        // printf("Tag %d setNum %d\n",tag,setNum);
-        for (j = 0, count = 0; j < numOfWays; j++)
-        {
-            if (cache8[setNum].c[j].valid == 1 && cache8[setNum].c[j].tag == tag)
-            {
-                // printf("Cache hit at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache8[setNum].c[j].valid, cache8[setNum].c[j].tag);
-                hit++;
-                return 1;
-                break;
-            }
-            //Beginning with all misses
-            else if (cache8[setNum].c[j].valid == 0)
-            {
-                // printf("Cache miss with no data at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache2[setNum].c[j].valid, cache2[setNum].c[j].tag);
-                cache8[setNum].c[j].valid = 1;
-                cache8[setNum].c[j].tag = tag;
-                cache8[setNum].front = (cache8[setNum].front + 1) % numOfWays;
-                // printf("Data added at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache8[setNum].c[j].valid, cache8[setNum].c[j].tag);
-                miss++;
-                return 0;
-                break;
-            }
-            else
-            {
-                // printf("Cache miss at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache8[setNum].c[j].valid, cache8[setNum].c[j].tag);
-                count++;
-            }
-            // if (cache2[i].c[j].valid == 0 || cache2[i].c[j].tag!=tag)
-            // {
-            //     count++;
-            // }
-            if (count == numOfWays)
-            {
-                // printf("All cache lines in the set checked and non match so fifo performed back%d\n", cache2[setNum].back);
-                miss++;
-                cache8[setNum].c[cache8[setNum].back].tag = tag;
-                cache8[setNum].c[cache8[setNum].back].valid = 1;
-                cache8[setNum].back = (cache8[setNum].back + 1) % numOfWays;
-                return 0;
-            }
-        }
-    }
-    // return ((float)hit / size);
-    // printf("Hit %d Miss %d", hit, miss);
-}
-float calcforCacheset16(long long indices, long long tags, int size, int numOfWays)
-{
-    int i, j, count;
-    for (i = 0; i < size; i++)
-    {
-        setNum = indices;
-        tag = tags;
-        // printf("Tag %d setNum %d\n",tag,setNum);
-        for (j = 0, count = 0; j < numOfWays; j++)
-        {
-            if (cache16[setNum].c[j].valid == 1 && cache16[setNum].c[j].tag == tag)
-            {
-                // printf("Cache hit at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache16[setNum].c[j].valid, cache16[setNum].c[j].tag);
-                hit++;
-                return 1;
-                break;
-            }
-            //Beginning with all misses
-            else if (cache16[setNum].c[j].valid == 0)
-            {
-                // printf("Cache miss with no data at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache2[setNum].c[j].valid, cache2[setNum].c[j].tag);
-                cache16[setNum].c[j].valid = 1;
-                cache16[setNum].c[j].tag = tag;
-                cache16[setNum].front = (cache16[setNum].front + 1) % numOfWays;
-                // printf("Data added at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache16[setNum].c[j].valid, cache16[setNum].c[j].tag);
-                miss++;
-                return 0;
-                break;
-            }
-            else
-            {
-                // printf("Cache miss at set %d and cache line %d valid:%d Tag:%d\n", setNum, j, cache16[setNum].c[j].valid, cache16[setNum].c[j].tag);
-                count++;
-            }
-            // if (cache2[i].c[j].valid == 0 || cache2[i].c[j].tag!=tag)
-            // {
-            //     count++;
-            // }
-            if (count == numOfWays)
-            {
-                // printf("All cache lines in the set checked and non match so fifo performed back%d\n", cache16[setNum].back);
-                miss++;
-                cache16[setNum].c[cache16[setNum].back].tag = tag;
-                cache16[setNum].c[cache16[setNum].back].valid = 1;
-                cache16[setNum].back = (cache16[setNum].back + 1) % numOfWays;
-                return 0;
-            }
-        }
-    }
-    // printf("Hit %d Miss %d", hit, miss);
-    // return ((float)hit / size);
-}
-float fifo(long long indices, long long tags, int size, int numOfWays)
-{
-    float percentage;
-    if (numOfWays == 2)
-    {
-        percentage = calcforCacheset2(indices, tags, size, numOfWays);
-    }
-    else if (numOfWays == 4)
-    {
-        percentage = calcforCacheset4(indices, tags, size, numOfWays);
-    }
-    else if (numOfWays == 8)
-    {
-        percentage = calcforCacheset8(indices, tags, size, numOfWays);
-    }
-    else
-    {
-        percentage = calcforCacheset16(indices, tags, size, numOfWays);
-    }
-    return percentage;
+   cachesim_initfifo(D1c, &D1);
 }

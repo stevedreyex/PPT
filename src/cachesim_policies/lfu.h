@@ -74,7 +74,7 @@ void lfu_sim(Addr a, UChar size, ULong* m1, ULong *mL){
 	int min_freq = 1e9;
 	long long int p= c->assoc*set_no;
 
-	// Coule found
+	// Could found
 	for(j=p;j<p+c->assoc;j++){
 		if(set[j].first == tag){
 			set[j].second++;

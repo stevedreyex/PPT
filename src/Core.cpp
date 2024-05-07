@@ -20,6 +20,7 @@
 #include "cachesim_policies/common.h"
 #include "cachesim_policies/lru.h"
 #include "cachesim_policies/lfu.h"
+#include "cachesim_policies/fifo.h"
 
 // Define a macro for error handling
 #define CHECK_NULL(pointer, message) \
@@ -1927,6 +1928,7 @@ int main(int argc, char *argv[]) {
   switch(hash_(sim_policy)){
           case  hash_compile_time( "lru" ): init_func = &lru_init; sim_func = &lru_sim; break;
           case  hash_compile_time( "lfu" ): init_func = &lfu_init; sim_func = &lfu_sim; break;
+          case  hash_compile_time( "fifo" ): init_func = &fifo_init; sim_func = &fifo_sim; break;
   }
   /* 
    * int parse_dwarf(char **unit, FILE *fp)
