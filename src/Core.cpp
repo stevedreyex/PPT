@@ -17,7 +17,9 @@
 #include "../ppcg/pet/scop.h"
 #include "../ppcg/pet/scop_yaml.h"
 
+#include "cachesim_policies/common.h"
 #include "cachesim_policies/lru.h"
+#include "cachesim_policies/lfu.h"
 
 // Define a macro for error handling
 #define CHECK_NULL(pointer, message) \
@@ -33,42 +35,21 @@
 char *sim_prog_path;  // argv[1]
 char *exe_prog_path;  // argv[2]
 char *pet_prog_args;  // argv[3]
+char *sim_policy;  // argv[4]
+// Function pointers
+static void (*init_func)(cache_t, cache_t);
+static void (*sim_func)(Addr, UChar, ULong*, ULong*);
+
 std::vector<std::pair<const char *, int>> var_n_val;
 std::unordered_map<std::string, int> sim_index_map;
 std::set<std::string> constval_counter = {};
 
 typedef std::uint64_t hash_t;
-typedef unsigned long long int ULong;
-typedef unsigned long Addr;
 constexpr hash_t prime = 0x100000001B3ull;  
 constexpr hash_t basis = 0xCBF29CE484222325ull;  
 
-// For cache simulation
-typedef struct {
-   int size;       // bytes
-   int assoc;
-   int line_size;  // bytes
-} cache_t;
-
-typedef struct {
-   int          size;                   /* bytes */
-   int          assoc;
-   int          line_size;              /* bytes */
-   int          sets;
-   int          sets_min_1;
-   int          line_size_bits;
-   int          tag_shift;
-   char        desc_line[128];         /* large enough */
-   unsigned long*       tags;
-} cache_t2;
-
-static cache_t2 LL;
-static cache_t2 I1;
-static cache_t2 D1;
-
-ULong D1mr = 0, DLmr = 0;
-ULong D1mw = 0, DLmw = 0;
-ULong Dr = 0, Dw = 0;
+cache_t2 LL;
+cache_t2 D1;
 ULong *miss_per_stmt;
   
 hash_t hash_( char const * str)   
@@ -316,12 +297,6 @@ static void cachesim_initcache(cache_t config, cache_t2* c)
 
    for (i = 0; i < c->sets * c->assoc; i++)
       c->tags[i] = 0;
-}
-
-static void cachesim_initcaches(cache_t D1c, cache_t LLc)
-{
-   cachesim_initcache(D1c, &D1);
-   cachesim_initcache(LLc, &LL);
 }
 
 /*
@@ -1809,9 +1784,9 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
             miss_per_stmt[ 6 * tree->curr_stmt  + 3]++;
             prev_d1m = miss_per_stmt[ 6 * tree->curr_stmt  + 4];
             // prev_dlm = miss_per_stmt[ 6 * tree->curr_stmt  + 5];
-            // cachesim_D1_doref(addr, ARR_ELEM_SIZE, &miss_per_stmt[ 6 * tree->curr_stmt  + 4],
-            //  &miss_per_stmt[ 6 * tree->curr_stmt  + 5]);
-            miss_per_stmt[ 6 * tree->curr_stmt  + 4] += lru((addr >> D1.line_size_bits) / D1.sets, (addr >> D1.line_size_bits) % D1.sets, 1, D1.assoc, D1.line_size);
+            sim_func(addr, ARR_ELEM_SIZE, &miss_per_stmt[ 6 * tree->curr_stmt  + 4],
+             &miss_per_stmt[ 6 * tree->curr_stmt  + 5]);
+            // miss_per_stmt[ 6 * tree->curr_stmt  + 4] += lru((addr >> D1.line_size_bits) / D1.sets, (addr >> D1.line_size_bits) % D1.sets, 1, D1.assoc, D1.line_size);
 
 
             #ifdef SIM_OBSERVE
@@ -1822,9 +1797,9 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
             miss_per_stmt[ 6 * tree->curr_stmt ]++;
             prev_d1m = miss_per_stmt[ 6 * tree->curr_stmt  + 1];
             // prev_dlm = miss_per_stmt[ 6 * tree->curr_stmt  + 2];
-            // cachesim_D1_doref(addr, ARR_ELEM_SIZE, &miss_per_stmt[ 6 * tree->curr_stmt  + 1],
-            //  &miss_per_stmt[ 6 * tree->curr_stmt  + 2]);
-            miss_per_stmt[ 6 * tree->curr_stmt  + 1] += lru((addr >> D1.line_size_bits) / D1.sets, (addr >> D1.line_size_bits) % D1.sets, 1, D1.assoc, D1.line_size);
+            sim_func(addr, ARR_ELEM_SIZE, &miss_per_stmt[ 6 * tree->curr_stmt  + 1],
+             &miss_per_stmt[ 6 * tree->curr_stmt  + 2]);
+            // miss_per_stmt[ 6 * tree->curr_stmt  + 1] += lru((addr >> D1.line_size_bits) / D1.sets, (addr >> D1.line_size_bits) % D1.sets, 1, D1.assoc, D1.line_size);
             #ifdef SIM_OBSERVE
             if (prev_d1m != miss_per_stmt[ 6 * tree->curr_stmt  + 1]) report_miss(1, 1, ar, addr);
             // if (prev_dlm != miss_per_stmt[ 6 * tree->curr_stmt  + 2]) report_miss(0, 1, ar, addr);
@@ -1835,7 +1810,9 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
           // Constant access
           addr = ar->constAddr;
           miss_per_stmt[ 6 * tree->curr_stmt ]++;
-          miss_per_stmt[ 6 * tree->curr_stmt + 1 ] += lru((addr >> D1.line_size_bits) / D1.sets, (addr >> D1.line_size_bits) % D1.sets, 1, D1.assoc, D1.line_size);
+          // miss_per_stmt[ 6 * tree->curr_stmt + 1 ] += lru((addr >> D1.line_size_bits) / D1.sets, (addr >> D1.line_size_bits) % D1.sets, 1, D1.assoc, D1.line_size);
+          sim_func(addr, ARR_ELEM_SIZE, &miss_per_stmt[ 6 * tree->curr_stmt  + 1],
+             &miss_per_stmt[ 6 * tree->curr_stmt  + 2]);
           // printf("Constant addr: 0x%.12llx\n", addr);
         }
       }
@@ -1895,7 +1872,7 @@ void diff_result(std::vector<std::pair<int, int> *> *pet_tree_tag){
     printf("%llu ", total[i]);
   }
 
-  std::cout << "\nLocal: " << std::endl;
+  std::cout << "\nValgrind LRU: " << std::endl;
   while (getline(&line_ch, &line_length, fp) != -1) {
     // line_ch have "fn" then is starts from the next line
     if (line_ch[0] == 'f' && line_ch[1] == 'n')  start_parse = 1;
@@ -1916,7 +1893,7 @@ void diff_result(std::vector<std::pair<int, int> *> *pet_tree_tag){
     }
   }
   // Dump local
-  printf("Local sum: ");
+  printf("Referenced sum: ");
   for (int i = 0; i < 6; i++){
     printf("%llu ", local[i]);
   }
@@ -1942,9 +1919,15 @@ int main(int argc, char *argv[]) {
   sim_prog_path = argv[1];
   exe_prog_path = argv[2];
   pet_prog_args = argv[3];
+  sim_policy = argv[4];
+
   int status = 0;
   std::cout << "Simulate the program: " << sim_prog_path << std::endl;
 
+  switch(hash_(sim_policy)){
+          case  hash_compile_time( "lru" ): init_func = &lru_init; sim_func = &lru_sim; break;
+          case  hash_compile_time( "lfu" ): init_func = &lfu_init; sim_func = &lfu_sim; break;
+  }
   /* 
    * int parse_dwarf(char **unit, FILE *fp)
    *
@@ -2116,7 +2099,7 @@ int main(int argc, char *argv[]) {
   cache_t  D1c, LLc;
   D1c = (cache_t) { 32768, 8, 64 };
   LLc = (cache_t) { 2097152, 16, 64 };
-  cachesim_initcaches(D1c, LLc);
+  init_func(D1c, LLc);
   status = gen_and_sim_addr(tree, dom);
 
   diff_result(pet_tree_tag);

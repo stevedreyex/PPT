@@ -1,0 +1,9 @@
+*.a
+*.o
+*.cu
+*.hu
+.vscode
+*.txt
+*.so
+*-linux
+*/install/
