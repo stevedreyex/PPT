@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <regex>
 #include <math.h>
+#include <argp.h>
 
 #include <isl/arg.h>
 #include <isl/ctx.h>
@@ -35,10 +36,33 @@
 
 #define IDT(n) for (int i = 0; i < n; i++) printf(" ");
 
-char *sim_prog_path;  // argv[1]
-char *exe_prog_path;  // argv[2]
-char *pet_prog_args;  // argv[3]
-char *sim_policy;  // argv[4]
+const char *argp_program_version = "argp_example 1.0";
+const char *argp_program_bug_address = "<bug@example.com>";
+
+static char doc[] =
+  "This program demonstrates the usage of argp for parsing command-line arguments.";
+
+static char args_doc[] = "ARG1 ARG2 ARG3 ARG4";
+
+static struct argp_option options[] = {
+  {"sim_prog_path", 's', "SIM_PROG_PATH", 0, "Simulation program path"},
+  {"exe_prog_path", 'e', "EXE_PROG_PATH", 0, "Executable program path"},
+  {"pet_prog_args", 'p', "PET_PROG_ARGS", 0, "Pet program arguments"},
+  {"sim_policy", 'i', "SIM_POLICY", 0, "Simulation policy"},
+  {"cmp2valgrind", 'c', 0, 0, "Compare the simulation result with valgrind (LRU)"},
+  {0}
+};
+
+struct arguments {
+  char *sim_prog_path;
+  char *exe_prog_path;
+  char *pet_prog_args;
+  char *sim_policy;
+  int valgrind_cmp;
+};
+
+struct arguments arguments;
+
 // Function pointers
 static void (*init_func)(cache_t, cache_t);
 static void (*sim_func)(Addr, UChar, ULong*, ULong*);
@@ -198,6 +222,13 @@ struct extTree {
   int execution_time;
 } ;
 
+void init_arguments() {
+  arguments.sim_prog_path = NULL;
+  arguments.exe_prog_path = NULL;
+  arguments.pet_prog_args = NULL;
+  arguments.sim_policy = NULL;
+}
+
 /* The initializer starts */
 indexBound *init_indexBound() {
   indexBound *bound = (indexBound *)(malloc(sizeof(indexBound)));
@@ -274,33 +305,30 @@ MemoryAccess *copy_MemoryAccess(MemoryAccess *ma) {
   return new_ma;
 }
 
-/* By this point, the size/assoc/line_size has been checked. */
-static void cachesim_initcache(cache_t config, cache_t2* c)
-{
-   int i;
+static error_t parse_opt(int key, char *arg, struct argp_state *state) {
+  struct arguments *arguments = (struct arguments*)state->input;
 
-   c->size      = config.size;
-   c->assoc     = config.assoc;
-   c->line_size = config.line_size;
-
-   c->sets           = (c->size / c->line_size) / c->assoc;
-   c->sets_min_1     = c->sets - 1;
-   c->line_size_bits = log2(c->line_size);
-   c->tag_shift      = c->line_size_bits + log2(c->sets);
-
-   if (c->assoc == 1) {
-      printf(c->desc_line, "%d B, %d B, direct-mapped", 
-                                 c->size, c->line_size);
-   } else {
-      printf(c->desc_line, "%d B, %d B, %d-way associative",
-                                 c->size, c->line_size, c->assoc);
-   }
-
-   c->tags = (unsigned long *)malloc(sizeof(unsigned long) * c->sets * c->assoc);
-
-   for (i = 0; i < c->sets * c->assoc; i++)
-      c->tags[i] = 0;
+  switch (key) {
+    case 's': arguments->sim_prog_path = arg; break;
+    case 'e': arguments->exe_prog_path = arg; break;
+    case 'p': arguments->pet_prog_args = arg; break;
+    case 'i': arguments->sim_policy = arg; break;
+    case 'c': arguments->valgrind_cmp = 1; break;
+    case ARGP_KEY_ARG: break;
+    case ARGP_KEY_END:
+      // the state->arg_num shall always being 0
+      // Since it represents the number of non-option argument being parsed
+      // From www.gnu.org/software/libc/manual/html_node/Argp-Example-3.html
+      // if (state->arg_num < 4)
+      //   argp_usage(state);
+      break;
+    default:
+      return ARGP_ERR_UNKNOWN;
+  }
+  return 0;
 }
+
+static struct argp argp = {options, parse_opt, args_doc, doc};
 
 /*
  * Parse the DWARF information from the binary
@@ -397,7 +425,7 @@ int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit) {
   }
 
   char sched[BUFFER_SIZE/4];
-  strcpy(sched, sim_prog_path);
+  strcpy(sched, arguments.sim_prog_path);
   char newSubstr[] = "/schedule/";
   char addition[] = ".sched";
   
@@ -407,9 +435,15 @@ int get_computed_sched_from_ppcg(char **unit, char *ret, int compilation_unit) {
   // Step 2: Append "sched" at the end
   strcat(sched, addition);
   // strcat(ppcg_call, "--save-schedule=/home/dreyex/use_this/schedule/jacobi-2d.sched");
+  // If already exist then just retuen don't call ppcg
+  if (access(sched, F_OK) == 0) {
+    // file exists
+    strcpy(ret, sched);
+    return arg_count;
+  }
   
   // A "--no-reschedule" flag is added to prevent ppcg from rescheduling the program
-  snprintf(ppcg_call, BUFFER_SIZE-1, "%s/ppcg %s %s --no-reschedule --save-schedule=%s", exe_prog_path, ppcg_args, pet_prog_args, sched);
+  snprintf(ppcg_call, BUFFER_SIZE-1, "%s/ppcg %s %s --no-reschedule --save-schedule=%s", arguments.exe_prog_path, ppcg_args, arguments.pet_prog_args, sched);
   #ifdef DEBUG
   printf("ppcg call: %s\n", ppcg_call);
   #endif
@@ -1198,7 +1232,7 @@ std::vector<std::pair<int, int> *> * get_access_relation_from_pet(domainSpace *d
     strcat(arg_list, " ");
   }
 
-  snprintf(pet_call, BUFFER_SIZE-1, "%s/pet %s %s", exe_prog_path, arg_list, pet_prog_args);
+  snprintf(pet_call, BUFFER_SIZE-1, "%s/pet %s %s", arguments.exe_prog_path, arg_list, arguments.pet_prog_args);
   char *line_ch = NULL;
   #ifdef DEBUG
   std::cout << "arg_list: " << arg_list << std::endl;
@@ -1561,15 +1595,15 @@ end:
   return pet_tree_tag_return;
 }
 
-int get_address_from_gdb(std::unordered_map<std::string, ArrayRef *>  *ar, char * sim_prog_path){
+int get_address_from_gdb(std::unordered_map<std::string, ArrayRef *>  *ar){
   char *gdb_args = (char *)(malloc(BUFFER_SIZE * sizeof(char)));
   memset(gdb_args, 0, BUFFER_SIZE);
   // The format like: gdb -batch -ex "b kernel_jacobi_2d" -ex run -ex "p A" -ex quit jacobi-2d
   strcpy(gdb_args, "gdb -batch -ex \"b kernel_");
   // find the last '/' in sim_prog_path
-  size_t pos = std::string(sim_prog_path).find_last_of("/");
+  size_t pos = std::string(arguments.sim_prog_path).find_last_of("/");
   // Copy from pos till the end
-  strcat(gdb_args, sim_prog_path + pos + 1);
+  strcat(gdb_args, arguments.sim_prog_path + pos + 1);
   // in gdb_args, replace the "-" with "_"
   for (int i = 27; i < strlen(gdb_args); i++){
     if (gdb_args[i] == '-') gdb_args[i] = '_';
@@ -1581,7 +1615,7 @@ int get_address_from_gdb(std::unordered_map<std::string, ArrayRef *>  *ar, char 
     strcat(gdb_args, "\" ");
   }
   strcat(gdb_args, "-ex quit ");
-  strcat(gdb_args, sim_prog_path);
+  strcat(gdb_args, arguments.sim_prog_path);
   #ifdef DEBUG
   printf("gdb_args: %s\n", gdb_args);
   #endif
@@ -1837,7 +1871,7 @@ int gen_and_sim_addr(extTree *tree, domainSpace *dom){
 
 void diff_result(std::vector<std::pair<int, int> *> *pet_tree_tag){
   char result[BUFFER_SIZE/4];
-  strcpy(result, sim_prog_path);
+  strcpy(result, arguments.sim_prog_path);
   char newSubstr[] = "/trace/cachegrind.out.";
   replaceString(result, "/obj/", newSubstr);
   int stmt_no = pet_tree_tag->size();
@@ -1875,40 +1909,41 @@ void diff_result(std::vector<std::pair<int, int> *> *pet_tree_tag){
     printf("%llu ", total[i]);
   }
 
-  std::cout << "\nValgrind LRU: " << std::endl;
-  while (getline(&line_ch, &line_length, fp) != -1) {
-    // line_ch have "fn" then is starts from the next line
-    if (line_ch[0] == 'f' && line_ch[1] == 'n')  start_parse = 1;
-    if (line_ch[0] == 's') start_parse = 0;
-    if (start_parse){
-      sscanf(line_ch, "%d %*llu %*llu %*llu %llu %llu %llu %llu %llu %llu", &line_no, &temp[0], &temp[1], &temp[2], &temp[3], &temp[4], &temp[5]);
-      // find the line_no in pet_tree_tag->first
-      auto it = std::find_if(pet_tree_tag->begin(), pet_tree_tag->end(), [line_no](std::pair<int, int> *p) {
-        if (p->second == line_no) return true;
-        return false;
-      });
-      if (it != pet_tree_tag->end()){
-        std::cout << line_no << "\t" << temp[0] << "\t" << temp[1] << "\t" << temp[2] << "\t" << temp[3] << "\t" << temp[4] << "\t" << temp[5] << std::endl;
-        for (int i = 0; i < 6; i++){
-          local[i] += temp[i];
+  if (!strcmp(arguments.sim_policy, "lru") && arguments.valgrind_cmp){
+    std::cout << "\nValgrind LRU: " << std::endl;
+    while (getline(&line_ch, &line_length, fp) != -1) {
+      // line_ch have "fn" then is starts from the next line
+      if (line_ch[0] == 'f' && line_ch[1] == 'n')  start_parse = 1;
+      if (line_ch[0] == 's') start_parse = 0;
+      if (start_parse){
+        sscanf(line_ch, "%d %*llu %*llu %*llu %llu %llu %llu %llu %llu %llu", &line_no, &temp[0], &temp[1], &temp[2], &temp[3], &temp[4], &temp[5]);
+        // find the line_no in pet_tree_tag->first
+        auto it = std::find_if(pet_tree_tag->begin(), pet_tree_tag->end(), [line_no](std::pair<int, int> *p) {
+          if (p->second == line_no) return true;
+          return false;
+        });
+        if (it != pet_tree_tag->end()){
+          std::cout << line_no << "\t" << temp[0] << "\t" << temp[1] << "\t" << temp[2] << "\t" << temp[3] << "\t" << temp[4] << "\t" << temp[5] << std::endl;
+          for (int i = 0; i < 6; i++){
+            local[i] += temp[i];
+          }
         }
       }
     }
+    // Dump local
+    printf("Referenced sum: ");
+    for (int i = 0; i < 6; i++){
+      printf("%llu ", local[i]);
+    }
+    
+    printf("\nerror rate: ");
+    for (int i = 0; i < 6; i++){
+      if(total[i] != 0)
+        printf("%.4f%% ", (double)((signed long long)total[i] - (signed long long)local[i]) / local[i] * 100);
+      else
+        printf("0.0000%% ");
+    }
   }
-  // Dump local
-  printf("Referenced sum: ");
-  for (int i = 0; i < 6; i++){
-    printf("%llu ", local[i]);
-  }
-  
-  printf("\nerror rate: ");
-  for (int i = 0; i < 6; i++){
-    if(total[i] != 0)
-      printf("%.4f%% ", (double)((signed long long)total[i] - (signed long long)local[i]) / local[i] * 100);
-    else
-      printf("0.0000%% ");
-  }
-
   fclose(fp);
 }
 
@@ -1918,16 +1953,13 @@ void diff_result(std::vector<std::pair<int, int> *> *pet_tree_tag){
  * argv[2]: ppcg launch path
  */
 int main(int argc, char *argv[]) {
-  // initialize 10 ptr to store ppcg call path
-  sim_prog_path = argv[1];
-  exe_prog_path = argv[2];
-  pet_prog_args = argv[3];
-  sim_policy = argv[4];
+
+  argp_parse(&argp, argc, argv, 0, 0, &arguments);
 
   int status = 0;
-  std::cout << "Simulate the program: " << sim_prog_path << std::endl;
+  std::cout << "Simulate the program: " << arguments.sim_prog_path << std::endl;
 
-  switch(hash_(sim_policy)){
+  switch(hash_(arguments.sim_policy)){
         case  hash_compile_time( "lru" ): init_func = &lru_init; sim_func = &lru_sim; break;
         case  hash_compile_time( "lfu" ): init_func = &lfu_init; sim_func = &lfu_sim; break;
         case  hash_compile_time( "fifo" ): init_func = &fifo_init; sim_func = &fifo_sim; break;
@@ -1943,7 +1975,7 @@ int main(int argc, char *argv[]) {
    */
   FILE *fp;
   char cmd[BUFFER_SIZE];
-  snprintf(cmd,BUFFER_SIZE-1, "readelf --debug-dump=info %s", sim_prog_path);
+  snprintf(cmd,BUFFER_SIZE-1, "readelf --debug-dump=info %s", arguments.sim_prog_path);
   fp = popen(cmd, "r");
   if (fp == NULL) {
       printf("Failed to run command\n");
@@ -2080,7 +2112,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Construct the char array for launching gdb
-  get_address_from_gdb(dom->array_refs, sim_prog_path);
+  get_address_from_gdb(dom->array_refs);
   #ifdef DEBUG
   for (auto v : *dom->array_refs){
     std::cout << v.first << std::endl;
